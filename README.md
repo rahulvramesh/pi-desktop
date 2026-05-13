@@ -89,7 +89,12 @@ prd/
 
 ## Note on the design bundle
 
-The brief shipped two design-bundle URLs. The first (`dcS44xk5UoAtMuAacfWneQ`) returned HTTP 404 from this environment; the second (`or6rOp7fZw6TJkVdO1nnuQ`) returned a gzipped tarball that has been extracted into `prd/design-bundle/`. Tokens, layout, component vocabulary, and the canonical chat screen are implemented against that bundle and §x of the architecture plan in parallel.
+The brief shipped two design-bundle URLs.
+
+- **First URL** — `https://api.anthropic.com/v1/design/h/dcS44xk5UoAtMuAacfWneQ?open_file=Pi+Desktop.html`. Returned **HTTP 404** from this environment, on both initial fetch and a confirming retry (both `WebFetch` and direct `curl`). The endpoint is Anthropic's internal authenticated design-preview host and was not reachable from the build environment. This is explicitly flagged here rather than silently substituted, per the brief's instruction to "say so — never silently substitute."
+- **Second URL** — `https://api.anthropic.com/v1/design/h/or6rOp7fZw6TJkVdO1nnuQ?open_file=Pi+Desktop.html`. Returned a gzipped tarball containing the `pi-dekstop` React/Babel prototype (HTML/CSS/JSX components, sample data, tweaks-panel shell, chat transcript). It has been extracted verbatim into `prd/design-bundle/` and is the authoritative visual reference used throughout the implementation. Its `README.md` confirms it is the standard claude.ai/design handoff bundle for this project.
+
+Tokens, layout, component vocabulary, and the canonical chat screen are implemented against the second-URL bundle and §x of the architecture plan in parallel. Browse `prd/design-bundle/project/` to compare any component side-by-side with its React/Babel prototype origin.
 
 ## Backend switching at a glance
 
