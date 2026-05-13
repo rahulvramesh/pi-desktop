@@ -43,16 +43,18 @@ function buildCsp(): string {
     'form-action': ["'none'"],
   };
   if (isDev) {
-    // Vite injects its HMR client; relax connect-src only. Port is variable
-    // because electron-vite may shift up if 5173 is in use.
+    // Vite injects an inline HMR client preamble and uses Function/eval for
+    // hot-replacement. Relax script-src and style-src in dev only — the
+    // production CSP (used for the file:// build) stays strict per §viii.
+    // Port is variable because electron-vite may shift up if 5173 is in use.
     base['connect-src']?.push(
       'ws://localhost:*',
       'http://localhost:*',
       'ws://127.0.0.1:*',
       'http://127.0.0.1:*',
     );
-    base['style-src']?.push("'unsafe-inline'"); // Vite-injected styles in dev only
-    base['script-src']?.push("'self'");
+    base['style-src']?.push("'unsafe-inline'");
+    base['script-src']?.push("'unsafe-inline'", "'unsafe-eval'");
   }
   return Object.entries(base)
     .map(([k, v]) => `${k} ${v.join(' ')}`)

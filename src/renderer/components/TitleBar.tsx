@@ -1,4 +1,4 @@
-import { Command, History, PanelLeft, Settings, Sparkles } from 'lucide-react';
+import { Command, History, PanelLeft, Settings, SlidersHorizontal, Sparkles } from 'lucide-react';
 import { useAgentStore } from '../stores/agent.js';
 import { useUiStore } from '../stores/ui.js';
 import { PiGlyph } from './PiGlyph.js';
@@ -20,6 +20,8 @@ export function TitleBar() {
   const runState = useAgentStore((s) => s.runState);
   const toggleSidebar = useUiStore((s) => s.toggleSidebar);
   const toggleTweaks = useUiStore((s) => s.toggleTweaks);
+  const view = useUiStore((s) => s.view);
+  const setView = useUiStore((s) => s.setView);
 
   return (
     <div className={styles.titlebar}>
@@ -45,11 +47,28 @@ export function TitleBar() {
 
       <div className={styles.center}>
         <PiGlyph size={16} />
-        <span className={styles.crumb}>Pi</span>
+        <span
+          className={styles.crumb}
+          role="button"
+          tabIndex={0}
+          onClick={() => setView('chat')}
+          title="Back to chat"
+        >
+          Pi
+        </span>
         <span className={styles.sep}>/</span>
-        <span className={styles.crumb}>openclaw</span>
+        <span
+          className={styles.crumb}
+          role="button"
+          tabIndex={0}
+          onClick={() => setView('chat')}
+        >
+          openclaw
+        </span>
         <span className={styles.sep}>/</span>
-        <span className={styles.crumbActive}>Level loader v2</span>
+        <span className={styles.crumbActive}>
+          {view === 'settings' ? 'Settings' : 'Level loader v2'}
+        </span>
         <span className={styles.pillSlot}>
           <StatusPill state={runState} />
         </span>
@@ -71,12 +90,21 @@ export function TitleBar() {
           <Sparkles size={14} />
         </button>
         <button
+          className={`${styles.iconBtn} ${view === 'settings' ? styles.iconBtnActive : ''}`}
+          title="Settings"
+          aria-label="Settings"
+          aria-pressed={view === 'settings'}
+          onClick={() => setView(view === 'settings' ? 'chat' : 'settings')}
+        >
+          <Settings size={14} />
+        </button>
+        <button
           className={styles.iconBtn}
           title="Tweaks (⌥T)"
           aria-label="Tweaks"
           onClick={toggleTweaks}
         >
-          <Settings size={14} />
+          <SlidersHorizontal size={14} />
         </button>
       </div>
     </div>

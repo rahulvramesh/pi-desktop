@@ -1,6 +1,7 @@
 import { useEffect } from 'react';
 import { Chat } from './components/Chat.js';
 import { InspectorPane } from './components/InspectorPane.js';
+import { Settings } from './components/Settings.js';
 import { Sidebar } from './components/Sidebar.js';
 import { StatusBar } from './components/StatusBar.js';
 import { TitleBar } from './components/TitleBar.js';
@@ -14,6 +15,7 @@ export function App() {
   const hydrate = useUiStore((s) => s.hydrate);
   const sidebarVisible = useUiStore((s) => s.sidebarVisible);
   const rightPane = useUiStore((s) => s.rightPane);
+  const view = useUiStore((s) => s.view);
   const ensureSubscribed = useAgentStore((s) => s.ensureSubscribed);
 
   useEffect(() => {
@@ -30,7 +32,8 @@ export function App() {
     return <div className={styles.bootShell} />;
   }
 
-  const showRight = rightPane !== 'none';
+  // The right inspector is chat-only — Settings owns its full content column.
+  const showRight = view === 'chat' && rightPane !== 'none';
 
   return (
     <div className={styles.shell}>
@@ -42,7 +45,7 @@ export function App() {
           }`}
         >
           {sidebarVisible && <Sidebar />}
-          <Chat />
+          {view === 'settings' ? <Settings /> : <Chat />}
           {showRight && <InspectorPane />}
         </div>
         <StatusBar />

@@ -84,13 +84,18 @@
   background: color-mix(in srgb, var(--ink) 7%, transparent);
   color: var(--ink);
 }
-.iconBtn.active {
+.iconBtn.active,
+.iconBtnActive {
   background: var(--accent-soft);
   color: var(--accent);
 }
 
 .crumb {
   color: var(--ink-3);
+  cursor: pointer;
+}
+.crumb:hover {
+  color: var(--ink-2);
 }
 .crumbActive {
   color: var(--ink);

@@ -7,8 +7,12 @@
 import { create } from 'zustand';
 import { PREFS_DEFAULTS, type PrefsShape } from '../../shared/ipc.js';
 
+export type View = 'chat' | 'settings';
+
 interface UiState extends PrefsShape {
   tweaksOpen: boolean;
+  /** Current top-level view. Session-scoped; not persisted. */
+  view: View;
   /** True until the first hydrate completes — prevents flicker on launch. */
   ready: boolean;
 
@@ -17,6 +21,7 @@ interface UiState extends PrefsShape {
   setTweaksOpen(open: boolean): void;
   toggleTweaks(): void;
   toggleSidebar(): void;
+  setView(view: View): void;
 }
 
 function applyTokensToRoot(prefs: PrefsShape): void {
@@ -33,6 +38,7 @@ function applyTokensToRoot(prefs: PrefsShape): void {
 export const useUiStore = create<UiState>((set, get) => ({
   ...PREFS_DEFAULTS,
   tweaksOpen: false,
+  view: 'chat',
   ready: false,
 
   async hydrate() {
@@ -77,5 +83,8 @@ export const useUiStore = create<UiState>((set, get) => ({
   },
   toggleSidebar() {
     void get().patch({ sidebarVisible: !get().sidebarVisible });
+  },
+  setView(view) {
+    set({ view });
   },
 }));
