@@ -1,0 +1,1440 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Pi Coding Agent · Electron GUI Architecture Plan</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Instrument+Serif:ital@0;1&family=Geist:wght@300;400;500;600&family=Geist+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg: #f4f1ea;
+    --paper: #faf8f3;
+    --surface-sunken: #ece8de;
+    --ink: #1c1a16;
+    --ink-2: #44403a;
+    --ink-3: #7a756a;
+    --ink-4: #a8a293;
+    --rule: #e2dccd;
+    --rule-strong: #c9c1ad;
+    --rust: #c84a1f;
+    --rust-2: #e26a3b;
+    --accent-soft: rgba(200, 74, 31, 0.10);
+    --accent-edge: rgba(200, 74, 31, 0.28);
+    --ok: #3e7a4a;
+    --warn: #b07a16;
+    --err: #b3361a;
+    --info: #2e5e9c;
+    --add: #2f6d3d;
+    --add-bg: rgba(47, 109, 61, 0.10);
+    --del: #a8331a;
+    --del-bg: rgba(168, 51, 26, 0.10);
+    --teal: #2D7A6B;
+    --code-bg: #1A1815;
+    --code-fg: #E8E4D8;
+  }
+  * { box-sizing: border-box; }
+  html { background: var(--bg); }
+  body {
+    margin: 0;
+    font-family: 'Geist', sans-serif;
+    font-weight: 400;
+    font-size: 16.5px;
+    line-height: 1.65;
+    color: var(--ink);
+    background: var(--bg);
+    -webkit-font-smoothing: antialiased;
+  }
+  .page { max-width: 880px; margin: 0 auto; padding: 80px 56px 120px; }
+  .meta-label {
+    font-size: 11px;
+    font-weight: 500;
+    letter-spacing: 0.22em;
+    text-transform: uppercase;
+    color: var(--rust);
+    margin-bottom: 28px;
+  }
+  h1.title {
+    font-family: 'Instrument Serif', serif;
+    font-weight: 400;
+    font-size: 68px;
+    line-height: 1.02;
+    letter-spacing: -0.02em;
+    margin: 0 0 18px;
+  }
+  h1.title em { font-style: italic; color: var(--rust); }
+  .subtitle {
+    font-family: 'Instrument Serif', serif;
+    font-style: italic;
+    font-size: 24px;
+    line-height: 1.4;
+    color: var(--ink-2);
+    margin: 0 0 44px;
+    max-width: 640px;
+  }
+  .meta-bar {
+    display: flex;
+    gap: 36px;
+    padding: 14px 0;
+    border-top: 1px solid var(--rule);
+    border-bottom: 1px solid var(--rule);
+    margin-bottom: 72px;
+    font-size: 12px;
+    font-family: 'Geist Mono', monospace;
+    color: var(--ink-3);
+    flex-wrap: wrap;
+  }
+  .meta-bar .item span { color: var(--ink); font-weight: 500; margin-left: 6px; }
+  section { margin-bottom: 72px; }
+  h2.section-title {
+    font-family: 'Instrument Serif', serif;
+    font-weight: 400;
+    font-size: 38px;
+    line-height: 1.15;
+    letter-spacing: -0.01em;
+    margin: 0 0 24px;
+    padding-top: 20px;
+    border-top: 1px solid var(--rule);
+    display: flex;
+    align-items: baseline;
+    gap: 22px;
+  }
+  h2.section-title .num {
+    font-style: italic;
+    color: var(--rust);
+    font-size: 26px;
+    min-width: 48px;
+  }
+  h3 {
+    font-family: 'Geist', sans-serif;
+    font-size: 13px;
+    font-weight: 500;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    color: var(--ink-2);
+    margin: 36px 0 14px;
+  }
+  p { margin: 0 0 18px; max-width: 680px; }
+  p code, li code, td code, dd code {
+    background: rgba(28, 26, 23, 0.06);
+    padding: 1px 6px;
+    border-radius: 3px;
+    font-family: 'Geist Mono', monospace;
+    font-size: 0.86em;
+    color: var(--ink);
+  }
+  .compare { width: 100%; border-collapse: collapse; margin: 24px 0 8px; font-size: 14.5px; }
+  .compare th, .compare td {
+    text-align: left;
+    padding: 13px 14px;
+    border-bottom: 1px solid var(--rule);
+    vertical-align: top;
+  }
+  .compare th {
+    font-weight: 500;
+    font-size: 11px;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    color: var(--ink-3);
+    border-bottom: 1px solid var(--ink);
+  }
+  .compare tr:last-child td { border-bottom: none; }
+  .compare td.label { font-weight: 500; width: 200px; color: var(--ink); }
+  figure {
+    margin: 28px 0 16px;
+    padding: 28px 24px 18px;
+    background: var(--paper);
+    border: 1px solid var(--rule);
+    border-radius: 4px;
+  }
+  figure svg { display: block; max-width: 100%; height: auto; }
+  figcaption {
+    margin-top: 18px;
+    font-size: 12px;
+    font-family: 'Geist Mono', monospace;
+    color: var(--ink-3);
+    text-align: center;
+    letter-spacing: 0.04em;
+  }
+  pre {
+    background: var(--code-bg);
+    color: var(--code-fg);
+    padding: 22px 24px;
+    border-radius: 4px;
+    overflow-x: auto;
+    font-family: 'Geist Mono', monospace;
+    font-size: 13px;
+    line-height: 1.65;
+    margin: 22px 0;
+  }
+  pre code { font-family: 'Geist Mono', monospace; font-size: 1em; background: none; padding: 0; color: inherit; }
+  .kw { color: #D7906F; }
+  .str { color: #B5C794; }
+  .com { color: #807A6D; font-style: italic; }
+  .type { color: #8CB0CE; }
+  .fn { color: #E8B96D; }
+  .prop { color: #C4B6E6; }
+  ol.phases { list-style: none; padding: 0; counter-reset: phase; margin: 16px 0 0; }
+  ol.phases li {
+    counter-increment: phase;
+    padding: 22px 0 22px 88px;
+    border-top: 1px solid var(--rule);
+    position: relative;
+    max-width: 720px;
+  }
+  ol.phases li:last-child { border-bottom: 1px solid var(--rule); }
+  ol.phases li:before {
+    content: "Phase " counter(phase);
+    position: absolute;
+    left: 0;
+    top: 24px;
+    font-family: 'Instrument Serif', serif;
+    font-style: italic;
+    color: var(--rust);
+    font-size: 17px;
+    letter-spacing: 0.02em;
+  }
+  ol.phases h4 {
+    font-family: 'Instrument Serif', serif;
+    font-weight: 400;
+    font-size: 22px;
+    margin: 0 0 8px;
+    line-height: 1.3;
+  }
+  ol.phases p { margin: 0 0 6px; font-size: 15px; color: var(--ink-2); max-width: none; }
+  ol.steps { list-style: none; padding: 0; counter-reset: step; margin: 16px 0 0; max-width: 720px; }
+  ol.steps li {
+    counter-increment: step;
+    padding: 18px 0 18px 60px;
+    border-top: 1px solid var(--rule);
+    position: relative;
+  }
+  ol.steps li:last-child { border-bottom: 1px solid var(--rule); }
+  ol.steps li:before {
+    content: counter(step, decimal-leading-zero);
+    position: absolute;
+    left: 0;
+    top: 18px;
+    font-family: 'Instrument Serif', serif;
+    font-style: italic;
+    color: var(--rust);
+    font-size: 22px;
+  }
+  ol.steps p { margin: 0; font-size: 15px; color: var(--ink-2); max-width: none; }
+  ol.steps strong { color: var(--ink); font-weight: 500; }
+  .swatches {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+    gap: 18px;
+    margin: 18px 0 24px;
+    max-width: 720px;
+  }
+  .swatch-group h4 {
+    font-size: 11px;
+    font-weight: 500;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    color: var(--ink-3);
+    margin: 0 0 10px;
+    font-family: 'Geist Mono', monospace;
+  }
+  .swatch-row { display: flex; flex-direction: column; gap: 5px; }
+  .swatch {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 6px 10px;
+    background: var(--paper);
+    border: 1px solid var(--rule);
+    border-radius: 6px;
+  }
+  .swatch-chip {
+    width: 16px; height: 16px;
+    border-radius: 3px;
+    box-shadow: inset 0 0 0 1px rgba(0,0,0,0.05);
+    flex-shrink: 0;
+  }
+  .swatch-name {
+    color: var(--ink);
+    font-family: 'Geist', sans-serif;
+    font-size: 12.5px;
+    font-weight: 500;
+    flex: 1;
+  }
+  .swatch-hex { color: var(--ink-3); font-size: 11px; font-family: 'Geist Mono', monospace; }
+  .specimen {
+    margin: 14px 0;
+    padding: 22px 26px;
+    background: var(--paper);
+    border: 1px solid var(--rule);
+    border-radius: 6px;
+    max-width: 720px;
+  }
+  .specimen .face {
+    font-size: 10.5px;
+    font-weight: 500;
+    letter-spacing: 0.16em;
+    text-transform: uppercase;
+    color: var(--ink-3);
+    margin: 0 0 12px;
+    font-family: 'Geist Mono', monospace;
+  }
+  .specimen .display-serif {
+    font-family: 'Instrument Serif', serif;
+    font-style: italic;
+    font-size: 42px;
+    line-height: 1.05;
+    letter-spacing: -0.02em;
+    margin: 0;
+    color: var(--ink);
+  }
+  .specimen .display-sans {
+    font-family: 'Geist', sans-serif;
+    font-size: 30px;
+    line-height: 1.1;
+    letter-spacing: -0.02em;
+    margin: 0;
+    font-weight: 500;
+    color: var(--ink);
+  }
+  .specimen .body-sample {
+    font-family: 'Geist', sans-serif;
+    font-size: 15.5px;
+    line-height: 1.65;
+    margin: 14px 0 0;
+    color: var(--ink-2);
+    max-width: 580px;
+  }
+  .specimen .mono-sample {
+    font-family: 'Geist Mono', monospace;
+    font-size: 12.5px;
+    background: var(--code-bg);
+    color: var(--code-fg);
+    padding: 14px 18px;
+    border-radius: 4px;
+    margin: 0;
+    overflow-x: auto;
+    line-height: 1.6;
+  }
+  .vignettes {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+    gap: 16px;
+    margin: 16px 0;
+    max-width: 720px;
+  }
+  .vignette {
+    background: var(--paper);
+    border: 1px solid var(--rule);
+    border-radius: 6px;
+    padding: 22px 20px 18px;
+  }
+  .vignette .label {
+    font-size: 10.5px;
+    font-weight: 500;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    color: var(--ink-3);
+    margin-bottom: 16px;
+    font-family: 'Geist Mono', monospace;
+  }
+  .vignette .preview {
+    min-height: 40px;
+    display: flex;
+    align-items: center;
+  }
+  .vignette .note {
+    font-size: 12.5px;
+    color: var(--ink-2);
+    line-height: 1.55;
+    margin: 14px 0 0;
+  }
+  .sample-pill {
+    display: inline-flex; align-items: center; gap: 6px;
+    padding: 3px 9px 3px 8px;
+    border-radius: 999px;
+    font-size: 11.5px;
+    font-weight: 500;
+    font-family: 'Geist', sans-serif;
+    background: var(--accent-soft);
+    color: var(--rust);
+    border: 1px solid var(--accent-edge);
+  }
+  .sample-pill .pulse {
+    width: 6px; height: 6px;
+    border-radius: 50%;
+    background: var(--rust);
+    animation: pi-pulse 1.6s ease-in-out infinite;
+  }
+  @keyframes pi-pulse { 0%, 100% { opacity: 1 } 50% { opacity: 0.35 } }
+  .sample-crumb {
+    font-family: 'Geist', sans-serif;
+    font-size: 12.5px;
+    color: var(--ink-2);
+    display: inline-flex; gap: 7px; align-items: center;
+  }
+  .sample-crumb .pi-glyph {
+    display: inline-flex; align-items: center; justify-content: center;
+    width: 18px; height: 18px;
+    background: var(--rust);
+    color: white;
+    border-radius: 4px;
+    font-family: 'Instrument Serif', serif;
+    font-style: italic;
+    font-size: 13px;
+    line-height: 1;
+  }
+  .sample-crumb .sep { color: var(--ink-4); font-size: 10px; }
+  .sample-crumb .active { color: var(--ink); font-weight: 500; }
+  .sample-toolcard {
+    background: var(--bg);
+    border: 1px solid var(--rule);
+    border-left: 2px solid var(--rust);
+    border-radius: 4px;
+    padding: 8px 12px;
+    font-family: 'Geist Mono', monospace;
+    font-size: 12px;
+    color: var(--ink-2);
+    width: 100%;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+  }
+  .sample-toolcard .verb { color: var(--rust); font-weight: 500; }
+  .sample-toolcard .path { color: var(--ink); }
+  .sample-toolcard .stat { color: var(--add); font-size: 11px; margin-left: auto; }
+  .sample-kbd {
+    display: inline-flex; gap: 4px; align-items: center;
+    font-family: 'Geist Mono', monospace; font-size: 12px; color: var(--ink-2);
+  }
+  .sample-kbd kbd {
+    font-family: 'Geist Mono', monospace;
+    font-size: 11px;
+    padding: 2px 6px;
+    border-radius: 4px;
+    background: rgba(28,26,22,0.05);
+    color: var(--ink-2);
+    border: 1px solid var(--rule);
+    box-shadow: 0 1px 0 var(--rule);
+  }
+  dl.risks { margin: 0; }
+  dl.risks dt {
+    font-weight: 500;
+    font-size: 15.5px;
+    margin-top: 24px;
+    color: var(--ink);
+  }
+  dl.risks dt:first-child { margin-top: 0; }
+  dl.risks dd { margin: 4px 0 0; font-size: 15px; color: var(--ink-2); max-width: 680px; }
+  .callout {
+    margin: 26px 0;
+    padding: 18px 24px;
+    border-left: 2px solid var(--rust);
+    background: rgba(184, 92, 56, 0.05);
+    font-family: 'Instrument Serif', serif;
+    font-style: italic;
+    font-size: 20px;
+    line-height: 1.45;
+    color: var(--ink-2);
+    max-width: 700px;
+  }
+  .toc { margin-bottom: 80px; }
+  .toc ol {
+    list-style: none;
+    padding: 0;
+    counter-reset: toc;
+    font-family: 'Geist Mono', monospace;
+    font-size: 13.5px;
+    margin: 0;
+  }
+  .toc li {
+    counter-increment: toc;
+    padding: 8px 0;
+    border-bottom: 1px dotted var(--rule);
+    display: flex;
+    align-items: baseline;
+    gap: 18px;
+  }
+  .toc li:before {
+    content: counter(toc, decimal-leading-zero);
+    color: var(--rust);
+    flex-shrink: 0;
+  }
+  .toc a { color: var(--ink); text-decoration: none; }
+  .toc a:hover { color: var(--rust); }
+  ul.components { list-style: none; padding: 0; margin: 16px 0; }
+  ul.components li {
+    padding: 16px 0;
+    border-bottom: 1px solid var(--rule);
+    display: grid;
+    grid-template-columns: 200px 1fr;
+    gap: 28px;
+    align-items: baseline;
+  }
+  ul.components li:last-child { border-bottom: none; }
+  ul.components .name {
+    font-family: 'Geist Mono', monospace;
+    font-size: 13px;
+    color: var(--ink);
+    font-weight: 500;
+  }
+  ul.components .desc { font-size: 15px; color: var(--ink-2); max-width: 600px; }
+  footer {
+    margin-top: 100px;
+    padding-top: 24px;
+    border-top: 1px solid var(--rule);
+    font-size: 12.5px;
+    font-family: 'Geist Mono', monospace;
+    color: var(--ink-3);
+    display: flex;
+    justify-content: space-between;
+    gap: 24px;
+    flex-wrap: wrap;
+  }
+  footer a { color: var(--rust); text-decoration: none; border-bottom: 1px dashed var(--rule); }
+  footer a:hover { border-bottom-style: solid; }
+  @media (max-width: 720px) {
+    .page { padding: 44px 22px 60px; }
+    h1.title { font-size: 44px; }
+    .subtitle { font-size: 19px; }
+    h2.section-title { font-size: 28px; gap: 14px; }
+    h2.section-title .num { font-size: 20px; min-width: 0; }
+    .meta-bar { flex-direction: column; gap: 8px; }
+    ul.components li { grid-template-columns: 1fr; gap: 4px; }
+    ol.phases li { padding-left: 0; }
+    ol.phases li:before { position: static; display: block; margin-bottom: 6px; }
+  }
+  @media print {
+    html, body { background: white; }
+    .page { padding: 30px 24px; }
+    pre { font-size: 11px; }
+    footer { page-break-before: avoid; }
+  }
+</style>
+</head>
+<body>
+<div class="page">
+
+  <div class="meta-label">Architecture plan · draft</div>
+
+  <h1 class="title">Pi Coding Agent<br><em>Electron GUI</em></h1>
+  <p class="subtitle">One UI, one interface seam, two interchangeable backends — local SDK in&#8209;process and remote RPC over SSH.</p>
+
+  <div class="meta-bar">
+    <div class="item">Version<span>0.1 draft</span></div>
+    <div class="item">Owner<span>—</span></div>
+    <div class="item">Status<span>Proposal</span></div>
+    <div class="item">Target<span>Electron · Node 20+ · TypeScript</span></div>
+  </div>
+
+  <nav class="toc">
+    <h3>Contents</h3>
+    <ol>
+      <li><a href="#overview">Overview</a></li>
+      <li><a href="#sdk-vs-rpc">SDK vs RPC mode</a></li>
+      <li><a href="#decision">Decision</a></li>
+      <li><a href="#architecture">Architecture</a></li>
+      <li><a href="#components">Components</a></li>
+      <li><a href="#interface">The AgentBackend interface</a></li>
+      <li><a href="#phases">Implementation phases</a></li>
+      <li><a href="#operational">Operational foundations</a></li>
+      <li><a href="#ux">UX decisions to make</a></li>
+      <li><a href="#visual">Visual design</a></li>
+      <li><a href="#tech">Technology choices</a></li>
+      <li><a href="#ship">Build, ship, operate</a></li>
+      <li><a href="#testing">Testing strategy</a></li>
+      <li><a href="#starting-order">Recommended starting order</a></li>
+      <li><a href="#risks">Risks and open questions</a></li>
+      <li><a href="#references">References</a></li>
+    </ol>
+  </nav>
+
+  <section id="overview">
+    <h2 class="section-title"><span class="num">i.</span> Overview</h2>
+    <p>This document describes the architecture for an Electron-based graphical client to the Pi coding agent. The client must work against the user's local codebase today and against remote machines (cloud dev boxes, VMs, sandboxes) over SSH in a later phase. The renderer code, IPC contract, and user-facing experience are the same in both cases.</p>
+    <p>The plan adopts both of Pi's programmatic surfaces — the SDK and RPC mode — and hides the choice behind a single internal <code>AgentBackend</code> interface. Swapping local for remote is a one-line change in the main process; the renderer never knows the difference.</p>
+    <div class="callout">The agent should live next to the files. The GUI should not.</div>
+  </section>
+
+  <section id="sdk-vs-rpc">
+    <h2 class="section-title"><span class="num">ii.</span> SDK vs RPC mode</h2>
+    <p>Pi exposes the same underlying engine through two programmatic surfaces. They are not competing products — they are two transports for the same agent.</p>
+
+    <table class="compare">
+      <thead>
+        <tr><th>Aspect</th><th>SDK</th><th>RPC mode</th></tr>
+      </thead>
+      <tbody>
+        <tr><td class="label">Package</td><td><code>@earendil-works/pi-coding-agent</code></td><td><code>pi --mode rpc</code> (CLI)</td></tr>
+        <tr><td class="label">Language</td><td>Node.js / TypeScript only</td><td>Any (Python, Go, Rust, etc.)</td></tr>
+        <tr><td class="label">Process model</td><td>In-process library</td><td>Subprocess over stdin / stdout</td></tr>
+        <tr><td class="label">Wire format</td><td>Typed method calls and objects</td><td>JSON lines (one record per <code>\n</code>)</td></tr>
+        <tr><td class="label">Type safety</td><td>Full TypeScript types</td><td>Client must define its own</td></tr>
+        <tr><td class="label">Custom tools</td><td>Inline via <code>defineTool()</code></td><td>Only via on-disk extensions on the agent host</td></tr>
+        <tr><td class="label">State access</td><td>Direct property reads</td><td>Round-trip commands (<code>get_state</code>, <code>get_messages</code>)</td></tr>
+        <tr><td class="label">Streaming</td><td>Callback via <code>session.subscribe()</code></td><td>Line-delimited JSON events on stdout</td></tr>
+        <tr><td class="label">Process isolation</td><td>None — shared with host</td><td>Full — subprocess can be killed</td></tr>
+        <tr><td class="label">Remote operation</td><td>Not supported directly</td><td>Trivial over SSH (stdin/stdout tunneled)</td></tr>
+      </tbody>
+    </table>
+  </section>
+
+  <section id="decision">
+    <h2 class="section-title"><span class="num">iii.</span> Decision</h2>
+    <p>Adopt <em>both</em> backends, behind a single internal interface.</p>
+
+    <h3>Rationale</h3>
+    <p><strong>For local work,</strong> the SDK is the right primitive. Electron's main process is Node.js — there is no reason to spawn a subprocess and parse JSON when we can import a typed library directly. The SDK gives us custom tools (essential for integrating with native Electron dialogs and the renderer), direct state access, and event callbacks without serialization overhead.</p>
+
+    <p><strong>For remote work,</strong> RPC over SSH is the right primitive. SSH already gives us a stdin and a stdout to a remote process, with authentication, encryption, and reconnection semantics solved. Pi's RPC protocol is designed for exactly this: JSON commands in, JSON events out, line-delimited. Writing our own remote agent transport on top of the SDK would, in practice, reinvent RPC mode.</p>
+
+    <p><strong>The seam</strong> is an internal TypeScript interface named <code>AgentBackend</code>. Both implementations conform to it; the main process holds one instance; the renderer talks only to the main process. Adding a third backend later — Docker container, WSL, remote sandbox — is a localized change.</p>
+  </section>
+
+  <section id="architecture">
+    <h2 class="section-title"><span class="num">iv.</span> Architecture</h2>
+    <p>The Electron app at the top holds the abstraction. Underneath, two implementations carry out the work — one in-process, one across the network.</p>
+
+    <figure>
+      <svg width="100%" viewBox="0 0 680 580" role="img" xmlns="http://www.w3.org/2000/svg" aria-label="Electron app architecture: AgentBackend interface with LocalSdkBackend and RpcBackend implementations, the latter reaching a remote machine over SSH.">
+        <defs>
+          <marker id="arrow" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+            <path d="M2 1L8 5L2 9" fill="none" stroke="context-stroke" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+          </marker>
+          <style>
+            .arr { stroke: #807A6D; stroke-width: 1; fill: none; }
+            .light { stroke: #B0A89A; stroke-width: 1; fill: none; }
+            text { font-family: 'Geist', sans-serif; }
+            .ts { font-size: 12px; }
+            .th { font-size: 14px; font-weight: 500; }
+            .gray-fill { fill: #ECE9DF; stroke: #5F5E5A; }
+            .gray-th { fill: #2C2C2A; }
+            .gray-ts { fill: #5F5E5A; }
+            .teal-fill { fill: #E1F5EE; stroke: #0F6E56; }
+            .teal-th { fill: #04342C; }
+            .teal-ts { fill: #0F6E56; }
+            .coral-fill { fill: #FAECE7; stroke: #993C1D; }
+            .coral-th { fill: #4A1B0C; }
+            .coral-ts { fill: #993C1D; }
+            .white-fill { fill: #FFFFFF; }
+          </style>
+        </defs>
+
+        <rect class="gray-fill" x="40" y="30" width="600" height="160" rx="14" stroke-width="0.5"/>
+        <text class="th gray-th" x="60" y="56">Electron app</text>
+        <text class="ts gray-ts" x="60" y="74">Local machine</text>
+
+        <rect class="white-fill" x="70" y="100" width="200" height="68" rx="8" stroke="#5F5E5A" stroke-width="0.5"/>
+        <text class="th gray-th" x="170" y="128" text-anchor="middle">Renderer</text>
+        <text class="ts gray-ts" x="170" y="148" text-anchor="middle">UI (React, Vue, etc.)</text>
+
+        <rect class="white-fill" x="310" y="100" width="300" height="68" rx="8" stroke="#5F5E5A" stroke-width="0.5"/>
+        <text class="th gray-th" x="460" y="128" text-anchor="middle">Main process</text>
+        <text class="ts gray-ts" x="460" y="148" text-anchor="middle">AgentBackend interface</text>
+
+        <line x1="272" y1="134" x2="308" y2="134" class="arr" marker-end="url(#arrow)" marker-start="url(#arrow)"/>
+
+        <line x1="460" y1="190" x2="460" y2="204" class="light"/>
+        <line x1="190" y1="204" x2="530" y2="204" class="light"/>
+        <line x1="190" y1="204" x2="190" y2="226" class="arr" marker-end="url(#arrow)"/>
+        <line x1="530" y1="204" x2="530" y2="226" class="arr" marker-end="url(#arrow)"/>
+
+        <rect class="teal-fill" x="80" y="232" width="220" height="56" rx="8" stroke-width="0.5"/>
+        <text class="th teal-th" x="190" y="256" text-anchor="middle">LocalSdkBackend</text>
+        <text class="ts teal-ts" x="190" y="274" text-anchor="middle">In-process, type-safe</text>
+
+        <rect class="coral-fill" x="420" y="232" width="220" height="56" rx="8" stroke-width="0.5"/>
+        <text class="th coral-th" x="530" y="256" text-anchor="middle">RpcBackend</text>
+        <text class="ts coral-ts" x="530" y="274" text-anchor="middle">Subprocess, JSON stdio</text>
+
+        <line x1="190" y1="288" x2="190" y2="310" class="arr" marker-end="url(#arrow)"/>
+
+        <rect class="white-fill" x="80" y="314" width="220" height="56" rx="8" stroke="#0F6E56" stroke-width="0.5"/>
+        <text class="th teal-th" x="190" y="338" text-anchor="middle">AgentSession</text>
+        <text class="ts teal-ts" x="190" y="356" text-anchor="middle">SDK in-process, typed API</text>
+
+        <line x1="190" y1="370" x2="190" y2="392" class="arr" marker-end="url(#arrow)"/>
+
+        <rect class="white-fill" x="80" y="396" width="220" height="56" rx="8" stroke="#0F6E56" stroke-width="0.5"/>
+        <text class="th teal-th" x="190" y="420" text-anchor="middle">Local filesystem</text>
+        <text class="ts teal-ts" x="190" y="438" text-anchor="middle">read, bash, edit, write</text>
+
+        <line x1="530" y1="288" x2="530" y2="358" class="arr" marker-end="url(#arrow)"/>
+        <text class="ts coral-ts" x="546" y="316">via SSH</text>
+        <text class="ts coral-ts" x="546" y="332">JSON over stdio</text>
+
+        <rect class="coral-fill" x="380" y="362" width="260" height="198" rx="12" stroke-width="0.5" stroke-dasharray="6 4"/>
+        <text class="th coral-th" x="400" y="388">Remote machine</text>
+        <text class="ts coral-ts" x="400" y="406">Where the code lives</text>
+
+        <rect class="white-fill" x="410" y="420" width="200" height="56" rx="8" stroke="#993C1D" stroke-width="0.5"/>
+        <text class="th coral-th" x="510" y="444" text-anchor="middle">pi --mode rpc</text>
+        <text class="ts coral-ts" x="510" y="462" text-anchor="middle">Subprocess on remote</text>
+
+        <line x1="510" y1="476" x2="510" y2="494" class="arr" marker-end="url(#arrow)"/>
+
+        <rect class="white-fill" x="410" y="498" width="200" height="56" rx="8" stroke="#993C1D" stroke-width="0.5"/>
+        <text class="th coral-th" x="510" y="522" text-anchor="middle">Remote filesystem</text>
+        <text class="ts coral-ts" x="510" y="540" text-anchor="middle">read, bash, edit, write</text>
+      </svg>
+      <figcaption>Fig. 1 — Two backends, one interface. Teal: local SDK path. Coral: remote RPC-over-SSH path.</figcaption>
+    </figure>
+
+    <h3>How data flows</h3>
+    <p>The renderer sends a user prompt over Electron IPC. The main process invokes <code>backend.prompt(...)</code> on whichever <code>AgentBackend</code> is currently active. The backend executes — either by calling into the in-process <code>AgentSession</code>, or by writing a JSON line to a subprocess's stdin. Events come back as native callbacks (SDK) or parsed JSON lines (RPC), get normalized to a common <code>AgentEvent</code> shape, and are forwarded to the renderer over IPC.</p>
+  </section>
+
+  <section id="components">
+    <h2 class="section-title"><span class="num">v.</span> Components</h2>
+    <ul class="components">
+      <li>
+        <div class="name">Renderer</div>
+        <div class="desc">Chrome process running the UI. Receives normalized <code>AgentEvent</code>s, sends prompts and user actions back via IPC. Has no knowledge of which backend is active.</div>
+      </li>
+      <li>
+        <div class="name">Main process</div>
+        <div class="desc">Node.js process. Owns the active <code>AgentBackend</code>, brokers IPC, holds any state that must survive renderer reloads.</div>
+      </li>
+      <li>
+        <div class="name">AgentBackend</div>
+        <div class="desc">Internal TypeScript interface. Defines the contract the main process depends on. Two implementations conform to it today; more may be added.</div>
+      </li>
+      <li>
+        <div class="name">LocalSdkBackend</div>
+        <div class="desc">Wraps an <code>AgentSession</code> from the Pi SDK. Imports tools and custom extensions from Electron-side code. Fast path; no serialization.</div>
+      </li>
+      <li>
+        <div class="name">RpcBackend</div>
+        <div class="desc">Spawns <code>pi --mode rpc</code> as a child process. Translates the <code>AgentBackend</code> method calls to JSON commands; parses JSON events back into the common shape. Works identically whether the subprocess is local or wrapped in SSH.</div>
+      </li>
+      <li>
+        <div class="name">SSH transport</div>
+        <div class="desc">Not a component we write — just the command we invoke. <code>ssh user@host pi --mode rpc</code> gives the <code>RpcBackend</code> a stdin and stdout that happen to lead to a remote process. Authentication, encryption, and connection lifecycle are SSH's responsibility.</div>
+      </li>
+      <li>
+        <div class="name">pi (remote)</div>
+        <div class="desc">The Pi binary running on the remote machine. Uses its own local tools to operate on remote files. Knows nothing about the network or the GUI.</div>
+      </li>
+      <li>
+        <div class="name">Remote filesystem</div>
+        <div class="desc">The actual code under edit. The agent sits next to it; only events, prompts, and tool results cross the wire.</div>
+      </li>
+    </ul>
+  </section>
+
+  <section id="interface">
+    <h2 class="section-title"><span class="num">vi.</span> The AgentBackend interface</h2>
+    <p>The contract is intentionally narrow. Anything the renderer cannot live without is here; everything else stays inside the backend implementation.</p>
+
+<pre><code><span class="com">// packages/electron/src/agent/backend.ts</span>
+
+<span class="kw">export interface</span> <span class="type">AgentBackend</span> {
+  <span class="com">// Prompting</span>
+  <span class="fn">prompt</span>(text: <span class="type">string</span>, options?: <span class="type">PromptOptions</span>): <span class="type">Promise</span>&lt;<span class="type">void</span>&gt;;
+  <span class="fn">steer</span>(text: <span class="type">string</span>): <span class="type">Promise</span>&lt;<span class="type">void</span>&gt;;
+  <span class="fn">followUp</span>(text: <span class="type">string</span>): <span class="type">Promise</span>&lt;<span class="type">void</span>&gt;;
+  <span class="fn">abort</span>(): <span class="type">Promise</span>&lt;<span class="type">void</span>&gt;;
+
+  <span class="com">// Event stream — returns an unsubscribe function</span>
+  <span class="fn">subscribe</span>(listener: (event: <span class="type">AgentEvent</span>) =&gt; <span class="type">void</span>): () =&gt; <span class="type">void</span>;
+
+  <span class="com">// State</span>
+  <span class="fn">getState</span>(): <span class="type">Promise</span>&lt;<span class="type">AgentState</span>&gt;;
+  <span class="fn">getMessages</span>(): <span class="type">Promise</span>&lt;<span class="type">AgentMessage</span>[]&gt;;
+
+  <span class="com">// Model control</span>
+  <span class="fn">setModel</span>(provider: <span class="type">string</span>, modelId: <span class="type">string</span>): <span class="type">Promise</span>&lt;<span class="type">void</span>&gt;;
+  <span class="fn">setThinkingLevel</span>(level: <span class="type">ThinkingLevel</span>): <span class="type">Promise</span>&lt;<span class="type">void</span>&gt;;
+
+  <span class="com">// Sessions</span>
+  <span class="fn">newSession</span>(): <span class="type">Promise</span>&lt;<span class="type">void</span>&gt;;
+  <span class="fn">switchSession</span>(path: <span class="type">string</span>): <span class="type">Promise</span>&lt;<span class="type">void</span>&gt;;
+  <span class="fn">fork</span>(entryId: <span class="type">string</span>): <span class="type">Promise</span>&lt;<span class="type">void</span>&gt;;
+
+  <span class="com">// Lifecycle</span>
+  <span class="fn">dispose</span>(): <span class="type">Promise</span>&lt;<span class="type">void</span>&gt;;
+}</code></pre>
+
+    <h3>Switching backends</h3>
+    <p>Selecting which backend to use happens once, at session start, in the main process:</p>
+
+<pre><code><span class="com">// packages/electron/src/agent/factory.ts</span>
+
+<span class="kw">export async function</span> <span class="fn">createBackend</span>(
+  config: <span class="type">AgentBackendConfig</span>
+): <span class="type">Promise</span>&lt;<span class="type">AgentBackend</span>&gt; {
+  <span class="kw">switch</span> (config.<span class="prop">kind</span>) {
+    <span class="kw">case</span> <span class="str">"local-sdk"</span>:
+      <span class="kw">return new</span> <span class="type">LocalSdkBackend</span>({ cwd: config.<span class="prop">cwd</span> });
+
+    <span class="kw">case</span> <span class="str">"rpc-local"</span>:
+      <span class="kw">return new</span> <span class="type">RpcBackend</span>({
+        spawn: { command: <span class="str">"pi"</span>, args: [<span class="str">"--mode"</span>, <span class="str">"rpc"</span>] },
+      });
+
+    <span class="kw">case</span> <span class="str">"rpc-ssh"</span>:
+      <span class="kw">return new</span> <span class="type">RpcBackend</span>({
+        spawn: {
+          command: <span class="str">"ssh"</span>,
+          args: [config.<span class="prop">host</span>, <span class="str">"pi"</span>, <span class="str">"--mode"</span>, <span class="str">"rpc"</span>],
+        },
+      });
+  }
+}</code></pre>
+  </section>
+
+  <section id="phases">
+    <h2 class="section-title"><span class="num">vii.</span> Implementation phases</h2>
+    <p>Each phase produces a runnable artifact. We do not start phase N+1 until phase N is shippable on its own.</p>
+
+    <ol class="phases">
+      <li>
+        <h4>Electron skeleton and IPC contract</h4>
+        <p>Set up the Electron shell, the renderer framework, and the typed IPC layer. Define the <code>AgentEvent</code> and <code>AgentCommand</code> shapes that the renderer will consume — these are the same regardless of backend.</p>
+      </li>
+      <li>
+        <h4>Define the AgentBackend interface</h4>
+        <p>Write the TypeScript interface. Build a <code>MockBackend</code> that emits canned events so the renderer can be developed against it. No real agent yet.</p>
+      </li>
+      <li>
+        <h4>LocalSdkBackend — happy path</h4>
+        <p>Implement <code>LocalSdkBackend</code> by wrapping <code>AgentSession</code> from <code>@earendil-works/pi-coding-agent</code>. Ship a working local-only app: it should be useful at this point.</p>
+      </li>
+      <li>
+        <h4>Custom tools bridging to Electron</h4>
+        <p>Add custom tools (defined inline via <code>defineTool()</code>) that interact with the Electron app: native file picker, in-renderer diff viewer, confirmation dialogs. These are SDK-only and will not cross the SSH boundary.</p>
+      </li>
+      <li>
+        <h4>RpcBackend against local subprocess</h4>
+        <p>Implement <code>RpcBackend</code>; verify it against a locally-spawned <code>pi --mode rpc</code>. Strict line framing on <code>\n</code> only — do not use <code>readline</code>. Confirm parity with the SDK backend for all interface methods.</p>
+      </li>
+      <li>
+        <h4>Extension UI sub-protocol</h4>
+        <p>Implement the <code>extension_ui_request</code> / <code>extension_ui_response</code> protocol. This is what lets remote extensions show <code>select</code>, <code>confirm</code>, <code>input</code>, and <code>editor</code> dialogs through our UI when no local Electron context exists.</p>
+      </li>
+      <li>
+        <h4>Remote: SSH transport</h4>
+        <p>Wire <code>RpcBackend</code> to spawn <code>ssh host pi --mode rpc</code>. Handle key prompts, host key verification, reconnect on broken pipe, and surface connection state to the renderer. Test on at least one cloud VM and one bastion-hopped target.</p>
+      </li>
+      <li>
+        <h4>Workspace switcher</h4>
+        <p>UI to manage saved workspaces (local cwd or remote host + cwd). Per-workspace session history. Make the local/remote distinction visible but boring.</p>
+      </li>
+    </ol>
+  </section>
+
+  <section id="operational">
+    <h2 class="section-title"><span class="num">viii.</span> Operational foundations</h2>
+    <p>The architecture describes a buildable system. These are the substrate concerns that determine whether it ships and stays shipped — the foundation everything else assumes is present, and the things that are painful to retrofit.</p>
+
+    <ul class="components">
+      <li>
+        <div class="name">Electron security</div>
+        <div class="desc"><code>nodeIntegration: false</code>, <code>contextIsolation: true</code>, <code>sandbox: true</code> on every <code>BrowserWindow</code>. The renderer talks to the main process only through a typed <code>preload.ts</code> exposing verbs (<code>prompt</code>, <code>abort</code>) via <code>contextBridge.exposeInMainWorld</code> — never capabilities (<code>fs</code>, <code>child_process</code>). Add a strict CSP. Pi can read and write files; if a hostile page ever rendered in your window, you do not want it driving the agent.</div>
+      </li>
+      <li>
+        <div class="name">Process lifecycle</div>
+        <div class="desc">Define the shutdown sequence: abort current operation → drain in-flight events → dispose backend → confirm subprocess exit. Each entry point (window close, renderer crash, main exit, OS signal) routes into the same sequence. Orphaned <code>pi --mode rpc</code> processes on remote machines are a real failure mode and very difficult to debug after the fact.</div>
+      </li>
+      <li>
+        <div class="name">Stream backpressure</div>
+        <div class="desc">Pi streams tokens fast. Forwarding every <code>text_delta</code> raw via <code>webContents.send()</code> will lock up the renderer's main thread on a long response. Batch deltas in ~16ms windows or every N characters, and drain via <code>requestAnimationFrame</code> on the renderer. The IPC channel is not the bottleneck; React reconciliation is.</div>
+      </li>
+      <li>
+        <div class="name">IPC contract</div>
+        <div class="desc">Channels are typed end-to-end — either <code>electron-trpc</code> or a small hand-rolled wrapper with shared TypeScript types. Define them alongside <code>AgentBackend</code> so the renderer and main process evolve together. Untyped IPC is fine for a prototype and miserable for anything larger.</div>
+      </li>
+      <li>
+        <div class="name">State ownership</div>
+        <div class="desc">Main process is the source of truth for message history and session state. The renderer caches for performance and re-hydrates on reload. Persist in <code>app.getPath('userData')</code> via <code>electron-store</code> or a small JSON file. Do not put anything you care about in <code>localStorage</code>.</div>
+      </li>
+      <li>
+        <div class="name">Auth and API keys</div>
+        <div class="desc">Pi reads credentials from <code>~/.pi/agent/auth.json</code> and environment variables. In RPC-over-SSH mode those must exist on the <em>remote</em> box, not the user's laptop. Pick a policy — in-UI paste forwarded via <code>setRuntimeApiKey</code>, env injection at spawn time, or out-of-band setup — and document it. Never log keys, never put them in URLs, never serialize them to session files.</div>
+      </li>
+      <li>
+        <div class="name">Logging and diagnostics</div>
+        <div class="desc">Rotating log file in <code>userData/logs/</code>. Capture Pi's full event stream at a configurable level. Ship a "Copy diagnostics" button in the UI. The single biggest predictor of whether you can confidently update your app is whether you can debug a failure you cannot reproduce locally.</div>
+      </li>
+    </ul>
+  </section>
+
+  <section id="ux">
+    <h2 class="section-title"><span class="num">ix.</span> UX decisions to make</h2>
+    <p>Questions the architecture cannot answer. Each looks small; each compounds across the product. They need designer and product input, not just engineering — but they need it early, because every later decision references whatever you chose here.</p>
+
+    <ul class="components">
+      <li>
+        <div class="name">Tool execution display</div>
+        <div class="desc">Pi streams <code>tool_execution_update</code> events with partial output as a tool runs. Live console pane? Collapsed by default? Truncated with click-to-expand? Whatever you decide, every tool the agent calls inherits it.</div>
+      </li>
+      <li>
+        <div class="name">Thinking display</div>
+        <div class="desc">For models with reasoning, <code>thinking_delta</code> events stream alongside the response. Inline? Behind a "Show thinking" toggle? Hidden by default? This sets the perceived character of the product more than almost any other choice.</div>
+      </li>
+      <li>
+        <div class="name">Permission prompts</div>
+        <div class="desc">Pi extensions raise <code>select</code>, <code>confirm</code>, <code>input</code>, and <code>editor</code> dialogs through the Extension UI sub-protocol. Native Electron dialogs or custom in-renderer modals? They have to look trustworthy and they must not be spoofable by agent output that happens to render HTML.</div>
+      </li>
+      <li>
+        <div class="name">Edit approval</div>
+        <div class="desc">The agent calls <code>edit</code> and <code>write</code>. Auto-apply? Show a diff and require approval per file? Approve once per session? Different products land in different places — Cursor approves silently, Aider asks per change, Claude Code has explicit modes. Pick a default, make it configurable, surface the choice prominently.</div>
+      </li>
+      <li>
+        <div class="name">Session resumption</div>
+        <div class="desc">The user closes the app and reopens it tomorrow. Last workspace? Last session in that workspace? An empty state with a "resume" affordance? Easy to defer; surprisingly hard to retrofit once users have built habits around whatever ships.</div>
+      </li>
+    </ul>
+  </section>
+
+  <section id="visual">
+    <h2 class="section-title"><span class="num">x.</span> Visual design</h2>
+    <p>The architecture above describes the system; this section captures the visual language engineering implements against. The full clickable prototype lives in the design bundle — what follows is the production reference, with tokens, type, and the canonical screen.</p>
+
+    <h3>Palette</h3>
+    <p>A warm paper background, deep ink for primary text, a single confident accent. Semantic colors and diff colors are reserved for the few places that genuinely encode meaning — not decoration.</p>
+
+    <div class="swatches">
+      <div class="swatch-group">
+        <h4>Paper</h4>
+        <div class="swatch-row">
+          <div class="swatch"><span class="swatch-chip" style="background: #f4f1ea"></span><span class="swatch-name">bg</span><span class="swatch-hex">#f4f1ea</span></div>
+          <div class="swatch"><span class="swatch-chip" style="background: #faf8f3"></span><span class="swatch-name">paper</span><span class="swatch-hex">#faf8f3</span></div>
+          <div class="swatch"><span class="swatch-chip" style="background: #ece8de"></span><span class="swatch-name">sunken</span><span class="swatch-hex">#ece8de</span></div>
+          <div class="swatch"><span class="swatch-chip" style="background: #e2dccd"></span><span class="swatch-name">rule</span><span class="swatch-hex">#e2dccd</span></div>
+        </div>
+      </div>
+      <div class="swatch-group">
+        <h4>Ink</h4>
+        <div class="swatch-row">
+          <div class="swatch"><span class="swatch-chip" style="background: #1c1a16"></span><span class="swatch-name">ink</span><span class="swatch-hex">#1c1a16</span></div>
+          <div class="swatch"><span class="swatch-chip" style="background: #44403a"></span><span class="swatch-name">ink-2</span><span class="swatch-hex">#44403a</span></div>
+          <div class="swatch"><span class="swatch-chip" style="background: #7a756a"></span><span class="swatch-name">ink-3</span><span class="swatch-hex">#7a756a</span></div>
+          <div class="swatch"><span class="swatch-chip" style="background: #a8a293"></span><span class="swatch-name">ink-4</span><span class="swatch-hex">#a8a293</span></div>
+        </div>
+      </div>
+      <div class="swatch-group">
+        <h4>Accent</h4>
+        <div class="swatch-row">
+          <div class="swatch"><span class="swatch-chip" style="background: #c84a1f"></span><span class="swatch-name">rust</span><span class="swatch-hex">#c84a1f</span></div>
+          <div class="swatch"><span class="swatch-chip" style="background: #e26a3b"></span><span class="swatch-name">rust-2</span><span class="swatch-hex">#e26a3b</span></div>
+          <div class="swatch"><span class="swatch-chip" style="background: rgba(200, 74, 31, 0.10); border: 1px solid rgba(200, 74, 31, 0.28)"></span><span class="swatch-name">soft</span><span class="swatch-hex">10% α</span></div>
+        </div>
+      </div>
+      <div class="swatch-group">
+        <h4>Semantic</h4>
+        <div class="swatch-row">
+          <div class="swatch"><span class="swatch-chip" style="background: #3e7a4a"></span><span class="swatch-name">ok</span><span class="swatch-hex">#3e7a4a</span></div>
+          <div class="swatch"><span class="swatch-chip" style="background: #b07a16"></span><span class="swatch-name">warn</span><span class="swatch-hex">#b07a16</span></div>
+          <div class="swatch"><span class="swatch-chip" style="background: #b3361a"></span><span class="swatch-name">err</span><span class="swatch-hex">#b3361a</span></div>
+          <div class="swatch"><span class="swatch-chip" style="background: #2e5e9c"></span><span class="swatch-name">info</span><span class="swatch-hex">#2e5e9c</span></div>
+        </div>
+      </div>
+      <div class="swatch-group">
+        <h4>Diff</h4>
+        <div class="swatch-row">
+          <div class="swatch"><span class="swatch-chip" style="background: #2f6d3d"></span><span class="swatch-name">add</span><span class="swatch-hex">#2f6d3d</span></div>
+          <div class="swatch"><span class="swatch-chip" style="background: #a8331a"></span><span class="swatch-name">del</span><span class="swatch-hex">#a8331a</span></div>
+        </div>
+      </div>
+    </div>
+
+    <p>Dark mode is mandatory and ships in the same tokens — every color above has a paired value on <code>[data-theme="dark"]</code>. Engineers should never reach for raw hex; consume tokens.</p>
+
+    <h3>Typography</h3>
+    <p>Three families. Geist for product chrome and body, Geist Mono for code and metadata, Instrument Serif italic for the few moments that deserve a typographic anchor — display titles, the π glyph, occasional editorial pull quotes.</p>
+
+    <div class="specimen">
+      <p class="face">Instrument Serif · display</p>
+      <p class="display-serif">Pi Coding Agent</p>
+      <p class="body-sample" style="font-family: 'Instrument Serif', serif; font-style: italic; font-size: 18px; color: var(--ink-2); max-width: 480px;">For the welcome screen, empty states, and the title slot of any artifact that deserves more weight than chrome can carry.</p>
+    </div>
+
+    <div class="specimen">
+      <p class="face">Geist · body sans</p>
+      <p class="display-sans">A terminal-grade coding agent, in a window you'd actually keep open.</p>
+      <p class="body-sample">Body copy at 15.5px, line-height 1.65. Geist's small caps, alternates, and tabular numerals are all enabled by default — keep <code>font-feature-settings</code> on the root and stop worrying about it.</p>
+    </div>
+
+    <div class="specimen">
+      <p class="face">Geist Mono · code & metadata</p>
+<pre class="mono-sample"><span class="kw">const</span> { session } = <span class="kw">await</span> <span class="fn">createAgentSession</span>({
+  sessionManager: <span class="type">SessionManager</span>.<span class="fn">inMemory</span>(),
+  tools: [readTool, bashTool],
+});
+
+session.<span class="fn">subscribe</span>(event => {
+  <span class="kw">if</span> (event.type === <span class="str">"message_update"</span>) handle(event);
+});</pre>
+    </div>
+
+    <h3>Canonical screen</h3>
+    <p>The chat view, with sidebar, conversation, and inspector pane. This is the screen the app is in most of the time; every other screen is a reduction of it.</p>
+
+    <figure>
+      <svg width="100%" viewBox="0 0 680 420" role="img" xmlns="http://www.w3.org/2000/svg" aria-label="Pi Desktop chat view: title bar with breadcrumb and status pill, file-tree sidebar on the left, conversation with tool-call cards in the middle, diff inspector on the right, status bar at the bottom.">
+        <defs>
+          <style>
+            .svg-paper { fill: #faf8f3; }
+            .svg-sunken { fill: #ece8de; }
+            .svg-border { stroke: #e2dccd; stroke-width: 0.5; fill: none; }
+            .svg-ink-1 { fill: #1c1a16; }
+            .svg-ink-2 { fill: #44403a; }
+            .svg-ink-3 { fill: #7a756a; }
+            .svg-ink-4 { fill: #a8a293; }
+            .svg-rust { fill: #c84a1f; }
+            .svg-add { fill: #2f6d3d; }
+            .svg-del { fill: #a8331a; }
+            .svg-add-bg { fill: rgba(47, 109, 61, 0.12); }
+            .svg-del-bg { fill: rgba(168, 51, 26, 0.12); }
+            .svg-sans { font-family: 'Geist', sans-serif; font-size: 8.5px; }
+            .svg-mono { font-family: 'Geist Mono', monospace; font-size: 7.5px; }
+            .svg-tiny { font-family: 'Geist', sans-serif; font-size: 7.5px; }
+            .svg-label { font-family: 'Geist', sans-serif; font-size: 8.5px; font-weight: 500; }
+          </style>
+        </defs>
+
+        <rect x="20" y="20" width="640" height="380" rx="8" fill="#faf8f3" stroke="#c9c1ad" stroke-width="0.5"/>
+
+        <rect x="20" y="20" width="640" height="22" rx="8" class="svg-paper"/>
+        <rect x="20" y="34" width="640" height="8" class="svg-paper"/>
+        <line x1="20" y1="42" x2="660" y2="42" stroke="#e2dccd" stroke-width="0.5"/>
+
+        <circle cx="34" cy="31" r="3.5" fill="#ff5f57" stroke="rgba(0,0,0,0.15)" stroke-width="0.5"/>
+        <circle cx="46" cy="31" r="3.5" fill="#febc2e" stroke="rgba(0,0,0,0.15)" stroke-width="0.5"/>
+        <circle cx="58" cy="31" r="3.5" fill="#28c840" stroke="rgba(0,0,0,0.15)" stroke-width="0.5"/>
+
+        <rect x="290" y="26" width="10" height="10" rx="2" class="svg-rust"/>
+        <text x="295" y="33.5" text-anchor="middle" fill="white" font-family="Instrument Serif" font-style="italic" font-size="9">π</text>
+        <text class="svg-tiny svg-ink-3" x="305" y="33.5">Pi · openclaw · </text>
+        <text class="svg-label svg-ink-1" x="353" y="33.5">Level loader v2</text>
+
+        <rect x="418" y="27" width="40" height="11" rx="5.5" fill="rgba(200, 74, 31, 0.10)" stroke="rgba(200, 74, 31, 0.28)" stroke-width="0.5"/>
+        <circle cx="425" cy="32.5" r="1.6" class="svg-rust"/>
+        <text x="431" y="34.5" class="svg-rust" font-family="Geist" font-size="7.5" font-weight="500">running</text>
+
+        <rect x="612" y="26" width="10" height="10" rx="2" fill="rgba(28,26,22,0.05)"/>
+        <rect x="627" y="26" width="10" height="10" rx="2" fill="rgba(28,26,22,0.05)"/>
+        <rect x="642" y="26" width="10" height="10" rx="2" fill="rgba(28,26,22,0.05)"/>
+
+        <rect x="20" y="42" width="155" height="344" class="svg-sunken"/>
+        <line x1="175" y1="42" x2="175" y2="386" stroke="#e2dccd" stroke-width="0.5"/>
+
+        <rect x="30" y="52" width="38" height="14" rx="3" class="svg-paper" stroke="#e2dccd" stroke-width="0.5"/>
+        <text class="svg-label svg-ink-1" x="49" y="62" text-anchor="middle">Files</text>
+        <text class="svg-tiny svg-ink-3" x="78" y="62">Sessions</text>
+        <text class="svg-tiny svg-ink-3" x="119" y="62">Skills</text>
+
+        <text x="30" y="86" class="svg-tiny svg-ink-2">▾ src/</text>
+        <rect x="38" y="91" width="125" height="11" rx="2" fill="rgba(200, 74, 31, 0.10)"/>
+        <text x="44" y="99" class="svg-mono svg-ink-1">level-loader.ts</text>
+        <text x="158" y="99" class="svg-tiny svg-rust" text-anchor="end">M</text>
+
+        <text x="44" y="113" class="svg-mono svg-ink-2">parser.ts</text>
+        <text x="44" y="126" class="svg-mono svg-ink-2">renderer.ts</text>
+        <text x="158" y="126" class="svg-tiny svg-add" text-anchor="end">A</text>
+
+        <text x="30" y="144" class="svg-tiny svg-ink-2">▸ tests/</text>
+        <text x="30" y="158" class="svg-mono svg-ink-2">AGENTS.md</text>
+        <text x="30" y="172" class="svg-mono svg-ink-2">package.json</text>
+
+        <rect x="195" y="55" width="285" height="22" rx="4" class="svg-sunken"/>
+        <text x="204" y="69" class="svg-mono svg-ink-1">refactor level-loader to handle nested groups</text>
+
+        <text x="195" y="93" class="svg-label svg-rust">Pi</text>
+        <text x="195" y="106" class="svg-sans svg-ink-2">I'll start by reading the file to understand the current structure.</text>
+
+        <rect x="195" y="115" width="285" height="22" rx="3" class="svg-paper" stroke="#e2dccd" stroke-width="0.5"/>
+        <rect x="195" y="115" width="2" height="22" class="svg-rust"/>
+        <text x="204" y="129" class="svg-mono"><tspan class="svg-rust" font-weight="500">read</tspan> <tspan class="svg-ink-1">src/level-loader.ts</tspan></text>
+        <text x="472" y="129" class="svg-tiny svg-ink-3" text-anchor="end">142 lines</text>
+
+        <text x="195" y="153" class="svg-sans svg-ink-2">The current implementation flattens groups. I'll add a recursive walker.</text>
+
+        <rect x="195" y="162" width="285" height="22" rx="3" class="svg-paper" stroke="#e2dccd" stroke-width="0.5"/>
+        <rect x="195" y="162" width="2" height="22" class="svg-rust"/>
+        <text x="204" y="176" class="svg-mono"><tspan class="svg-rust" font-weight="500">edit</tspan> <tspan class="svg-ink-1">src/level-loader.ts</tspan></text>
+        <text x="472" y="176" class="svg-tiny svg-add" text-anchor="end" font-weight="500">+18 −4</text>
+
+        <text x="195" y="200" class="svg-sans svg-ink-2">Now running the tests to verify…</text>
+
+        <rect x="195" y="209" width="285" height="22" rx="3" class="svg-paper" stroke="#e2dccd" stroke-width="0.5"/>
+        <rect x="195" y="209" width="2" height="22" class="svg-rust"/>
+        <text x="204" y="223" class="svg-mono"><tspan class="svg-rust" font-weight="500">bash</tspan> <tspan class="svg-ink-1">npm test</tspan></text>
+        <circle cx="472" cy="220" r="2.5" class="svg-rust">
+          <animate attributeName="opacity" values="1;0.3;1" dur="1.4s" repeatCount="indefinite"/>
+        </circle>
+
+        <rect x="195" y="350" width="285" height="32" rx="6" class="svg-paper" stroke="#c9c1ad" stroke-width="0.5"/>
+        <text x="204" y="370" class="svg-tiny svg-ink-3">Reply to Pi…</text>
+        <rect x="455" y="358" width="18" height="18" rx="4" class="svg-rust"/>
+        <text x="464" y="371" fill="white" font-family="Geist" font-size="10" text-anchor="middle">↵</text>
+
+        <line x1="495" y1="42" x2="495" y2="386" stroke="#e2dccd" stroke-width="0.5"/>
+
+        <rect x="505" y="52" width="32" height="14" rx="3" class="svg-paper" stroke="#e2dccd" stroke-width="0.5"/>
+        <text class="svg-label svg-ink-1" x="521" y="62" text-anchor="middle">Diff</text>
+        <text class="svg-tiny svg-ink-3" x="547" y="62">Term</text>
+        <text class="svg-tiny svg-ink-3" x="582" y="62">Preview</text>
+
+        <text x="505" y="86" class="svg-mono svg-ink-3">level-loader.ts</text>
+
+        <rect x="505" y="94" width="145" height="10" class="svg-del-bg"/>
+        <text x="510" y="101.5" class="svg-mono svg-del">−  function load(items) {</text>
+
+        <rect x="505" y="106" width="145" height="10" class="svg-add-bg"/>
+        <text x="510" y="113.5" class="svg-mono svg-add">+  function load(items, d=0) {</text>
+
+        <text x="510" y="125.5" class="svg-mono svg-ink-3">   return items.flatMap(item =></text>
+
+        <rect x="505" y="129" width="145" height="10" class="svg-del-bg"/>
+        <text x="510" y="136.5" class="svg-mono svg-del">−    item.children</text>
+
+        <rect x="505" y="141" width="145" height="10" class="svg-add-bg"/>
+        <text x="510" y="148.5" class="svg-mono svg-add">+    item.type === 'group'</text>
+
+        <rect x="505" y="153" width="145" height="10" class="svg-add-bg"/>
+        <text x="510" y="160.5" class="svg-mono svg-add">+      ? load(item.children, d+1)</text>
+
+        <rect x="505" y="165" width="145" height="10" class="svg-add-bg"/>
+        <text x="510" y="172.5" class="svg-mono svg-add">+      : [item]</text>
+
+        <text x="510" y="184.5" class="svg-mono svg-ink-3">   );</text>
+
+        <rect x="20" y="386" width="640" height="14" class="svg-sunken"/>
+        <line x1="20" y1="386" x2="660" y2="386" stroke="#e2dccd" stroke-width="0.5"/>
+
+        <circle cx="32" cy="393" r="1.6" class="svg-rust"/>
+        <text x="38" y="395.5" class="svg-tiny svg-rust" font-weight="500">running</text>
+
+        <text x="82" y="395.5" class="svg-tiny svg-ink-3">⎇ feat/level-loader-v2</text>
+        <text x="190" y="395.5" class="svg-tiny svg-ink-3">3 modified</text>
+        <text x="252" y="395.5" class="svg-tiny svg-ink-3">claude-sonnet-4.5 · 18.4k / 200k</text>
+        <text x="648" y="395.5" class="svg-tiny svg-ink-4" text-anchor="end">v0.18.4</text>
+      </svg>
+      <figcaption>Fig. 2 — Chat view. Three columns: file tree, conversation with inline tool-call cards, and a switchable inspector (Diff shown). Status pill in the title bar and again in the status bar gives the agent's state at a glance.</figcaption>
+    </figure>
+
+    <p>The right pane swaps between Diff, Term, and Preview — answering the "tool execution display" question from §ix by making the agent's work inspectable without leaving the chat. Sidebar can be collapsed; right pane can be hidden. Status pill animates while the agent is running.</p>
+
+    <h3>Component vocabulary</h3>
+    <p>Five patterns that recur across screens. Engineers should treat these as primitives — built once, reused everywhere.</p>
+
+    <div class="vignettes">
+      <div class="vignette">
+        <div class="label">Status pill</div>
+        <div class="preview">
+          <span class="sample-pill"><span class="pulse"></span>running</span>
+        </div>
+        <p class="note">Agent state, shown in the title bar and status bar. <code>idle</code> hides; <code>thinking</code> / <code>running</code> / <code>queued</code> animate the dot.</p>
+      </div>
+
+      <div class="vignette">
+        <div class="label">Title breadcrumb</div>
+        <div class="preview">
+          <span class="sample-crumb">
+            <span class="pi-glyph">π</span>
+            <span>Pi</span>
+            <span class="sep">/</span>
+            <span>openclaw</span>
+            <span class="sep">/</span>
+            <span class="active">Level loader v2</span>
+          </span>
+        </div>
+        <p class="note">Workspace → project → session. The active leaf is the only ink-1 segment.</p>
+      </div>
+
+      <div class="vignette">
+        <div class="label">Tool-call card</div>
+        <div class="preview">
+          <div class="sample-toolcard">
+            <span class="verb">edit</span>
+            <span class="path">src/level-loader.ts</span>
+            <span class="stat">+18 −4</span>
+          </div>
+        </div>
+        <p class="note">Verb in accent, target in ink, result in semantic color. <code>read</code>, <code>edit</code>, <code>bash</code>, <code>grep</code> share this template.</p>
+      </div>
+
+      <div class="vignette">
+        <div class="label">Command palette</div>
+        <div class="preview">
+          <span class="sample-kbd"><kbd>⌘</kbd><kbd>K</kbd></span>
+        </div>
+        <p class="note">Global. Opens an overlay with commands, files, skills. <code>esc</code> dismisses.</p>
+      </div>
+
+      <div class="vignette">
+        <div class="label">Tweaks panel</div>
+        <div class="preview">
+          <span class="sample-kbd"><kbd>⌥</kbd><kbd>T</kbd></span>
+        </div>
+        <p class="note">Floating, bottom-right. Theme, accent, font, density, sidebar, right-pane, agent state. Designer-facing, but kept in production as a debug surface.</p>
+      </div>
+    </div>
+
+    <h3>Tokens for engineers</h3>
+    <p>The CSS variables below are the source of truth. Light values shown; dark mode pairs ship in the same file under <code>[data-theme="dark"]</code>.</p>
+
+<pre><code><span class="com">/* src/styles/tokens.css */</span>
+
+<span class="kw">:root</span> {
+  <span class="com">/* Paper */</span>
+  <span class="prop">--bg</span>: <span class="str">#f4f1ea</span>;
+  <span class="prop">--surface</span>: <span class="str">#faf8f3</span>;
+  <span class="prop">--surface-sunken</span>: <span class="str">#ece8de</span>;
+  <span class="prop">--border</span>: <span class="str">#e2dccd</span>;
+  <span class="prop">--border-strong</span>: <span class="str">#c9c1ad</span>;
+
+  <span class="com">/* Ink */</span>
+  <span class="prop">--ink</span>: <span class="str">#1c1a16</span>;
+  <span class="prop">--ink-2</span>: <span class="str">#44403a</span>;
+  <span class="prop">--ink-3</span>: <span class="str">#7a756a</span>;
+  <span class="prop">--ink-4</span>: <span class="str">#a8a293</span>;
+
+  <span class="com">/* Accent (runtime-themable) */</span>
+  <span class="prop">--accent</span>: <span class="str">#c84a1f</span>;
+  <span class="prop">--accent-2</span>: <span class="str">#e26a3b</span>;
+  <span class="prop">--accent-soft</span>: <span class="fn">rgba</span>(200, 74, 31, 0.10);
+  <span class="prop">--accent-edge</span>: <span class="fn">rgba</span>(200, 74, 31, 0.28);
+
+  <span class="com">/* Semantic */</span>
+  <span class="prop">--ok</span>: <span class="str">#3e7a4a</span>;
+  <span class="prop">--warn</span>: <span class="str">#b07a16</span>;
+  <span class="prop">--err</span>: <span class="str">#b3361a</span>;
+  <span class="prop">--info</span>: <span class="str">#2e5e9c</span>;
+
+  <span class="com">/* Diff */</span>
+  <span class="prop">--add</span>: <span class="str">#2f6d3d</span>;
+  <span class="prop">--del</span>: <span class="str">#a8331a</span>;
+
+  <span class="com">/* Type */</span>
+  <span class="prop">--sans</span>: <span class="str">"Geist"</span>, ui-sans-serif, system-ui, sans-serif;
+  <span class="prop">--mono</span>: <span class="str">"Geist Mono"</span>, ui-monospace, monospace;
+  <span class="prop">--serif</span>: <span class="str">"Instrument Serif"</span>, Georgia, serif;
+}</code></pre>
+
+    <div class="callout">The accent is a runtime variable, not a paint choice. Users pick from six swatches; the tweaks panel writes <code>--accent</code> and everything downstream follows.</div>
+  </section>
+
+  <section id="tech">
+    <h2 class="section-title"><span class="num">xi.</span> Technology choices</h2>
+    <p>The plan has stayed framework-agnostic up to this point on purpose — the architecture and visual language don't depend on the implementation language. This section names the picks: what the production codebase is built in, what supports it, and what to deliberately avoid. Technology decisions are most expensive when they get made implicitly, by whoever opens an editor first.</p>
+
+    <h3>The core stack</h3>
+    <ul class="components">
+      <li>
+        <div class="name">React 18 + TypeScript</div>
+        <div class="desc">The renderer. Three reasons over the alternatives: the design prototype from §x is already React, so engineers can use it as a direct visual reference and copy patterns verbatim; Electron + React is the well-trodden path (VS Code, Slack, Cursor, Linear's desktop client all live here), so tooling and recipes exist for every problem; the Pi SDK is TypeScript-first, and the renderer will consume dozens of typed event, message, and tool shapes from it. React's TypeScript story is mature and frictionless.</div>
+      </li>
+      <li>
+        <div class="name">Electron 30+</div>
+        <div class="desc">The shell. Section iii already committed to this implicitly — this is just naming a version floor. Track recent stable, not an old LTS; security patches matter and the Node version inside Electron is what your code runs against.</div>
+      </li>
+      <li>
+        <div class="name">Vite + <code>electron-vite</code></div>
+        <div class="desc">The build. Fast HMR for the renderer, sensible defaults for the main and preload processes. Avoid webpack-based configurations unless there is a specific reason — the iteration loop matters every day, the bundle output only at ship time.</div>
+      </li>
+      <li>
+        <div class="name">Zustand</div>
+        <div class="desc">State. The agent's event stream needs careful, performant state management — React Context alone fragments and re-renders too aggressively at this scale, Redux Toolkit adds boilerplate the codebase doesn't earn. Zustand is the right size: a few well-named stores, no reducers, no boilerplate, easy to test.</div>
+      </li>
+      <li>
+        <div class="name">CSS variables + CSS modules</div>
+        <div class="desc">Styling. The design system from §x is already token-based; CSS modules consume those tokens directly with zero runtime overhead. Tailwind is acceptable if the team prefers it; the tokens still drive theming. What matters is that the accent / theme / density tweaks panel from §x writes CSS variables on <code>:root</code> and everything downstream picks them up automatically.</div>
+      </li>
+    </ul>
+
+    <h3>Supporting libraries</h3>
+    <ul class="components">
+      <li>
+        <div class="name">Radix UI primitives</div>
+        <div class="desc">Headless components for menus, dialogs, tooltips, popovers, command palette. Behaviour and accessibility are theirs; visual design stays ours.</div>
+      </li>
+      <li>
+        <div class="name">Lucide React</div>
+        <div class="desc">Icon set. Clean line icons, MIT-licensed, matches the prototype's spirit. Tree-shakes well.</div>
+      </li>
+      <li>
+        <div class="name">React Hook Form</div>
+        <div class="desc">Forms. Only when settings or workspace configuration get complex enough to need it. The early settings screen can use plain controlled inputs.</div>
+      </li>
+      <li>
+        <div class="name">Vitest</div>
+        <div class="desc">Unit and integration tests (§xiii). Same toolchain family as Vite, substantially faster than Jest for our workload, and the migration cost on new code is zero.</div>
+      </li>
+      <li>
+        <div class="name">Playwright</div>
+        <div class="desc">End-to-end tests. The §xiii e2e layer, driving the real Electron app against a real Pi subprocess and (for the remote-mode tests) an in-container <code>sshd</code>.</div>
+      </li>
+      <li>
+        <div class="name"><code>electron-builder</code></div>
+        <div class="desc">Packaging, code signing, and auto-update. Already named in §xii — repeated here so the production stack is in one place.</div>
+      </li>
+    </ul>
+
+    <h3>What not to use</h3>
+    <p>Naming these explicitly is half the work — otherwise someone quietly adds one, a small refactor becomes a large one, and arguing it out later costs more than picking it now.</p>
+
+    <dl class="risks">
+      <dt>Next.js, Remix, or any server-rendering framework.</dt>
+      <dd>We're shipping a desktop app, not a website. SSR, routing-as-filesystem, and edge runtimes add concepts the product doesn't need and friction the team will pay for daily.</dd>
+
+      <dt>Component kits: Material UI, Chakra, Mantine, Ant Design, shadcn/ui.</dt>
+      <dd>Each imposes a visual system. We have one. The cost of fighting an opinionated kit's defaults is higher than the cost of building primitives from Radix + CSS modules.</dd>
+
+      <dt>CSS-in-JS runtimes: Emotion, styled-components, vanilla-extract (runtime mode).</dt>
+      <dd>Boot overhead, fights the token system, hard to inspect in DevTools, and the theming features they advertise are already covered by CSS variables. Build-time CSS-in-JS (vanilla-extract in zero-runtime mode, linaria) is fine if anyone insists.</dd>
+
+      <dt>Redux Toolkit, MobX.</dt>
+      <dd>The state surface isn't large enough to earn the boilerplate. Zustand covers the same ground in a fraction of the code. Reconsider only if state genuinely outgrows it — which is unlikely for a session-scoped chat product.</dd>
+
+      <dt>Jest.</dt>
+      <dd>Vitest is faster, shares config with the build, and reports stack traces against original TypeScript. There is no reason to choose Jest for a Vite project.</dd>
+    </dl>
+
+    <h3>Alternatives worth a half-day spike</h3>
+    <p>Most of the picks above are defensible against their alternatives without further investigation. <strong>Tauri</strong> is the one exception that warrants genuine consideration over Electron.</p>
+
+    <p>Tauri uses the operating system's native webview instead of bundling Chromium. Installed size drops from ~150 MB to ~15–50 MB. Memory footprint drops proportionally. The native feel — particularly on macOS — improves noticeably.</p>
+
+    <p>The cost is the IPC model. Tauri's commands live on the Rust side; Pi's SDK is a Node library. To use Pi with Tauri you would run a Node sidecar process and bridge to it — which is essentially the <code>RpcBackend</code> path from §iv, used even for local work. That removes the in-process advantage of the SDK backend but does not break the architecture. Two engineering days, including a real round-trip of Pi events end-to-end, is enough to decide.</p>
+
+    <div class="callout">If installer size and memory footprint matter to your users, do the Tauri spike before committing to Electron. If they don't, ship on Electron and don't look back.</div>
+
+    <p>Vue and Svelte are not on this list. Both are excellent frameworks; neither would be wrong here. What pushes us to React specifically is the design prototype already being React and the prior-art density of Electron + React in adjacent products. A team with deep Vue or Svelte expertise should not switch to React just to follow this plan — they should adopt the visual system from §x, the architecture from §iv, and write the renderer in whatever framework lets them ship fastest.</p>
+  </section>
+
+  <section id="ship">
+    <h2 class="section-title"><span class="num">xii.</span> Build, ship, operate</h2>
+    <p>What it takes for users to install the app, trust it, update it, and let you fix things when they break. Most teams underestimate this category — particularly anything involving certificates and CI signing.</p>
+
+    <ul class="components">
+      <li>
+        <div class="name">Bundling</div>
+        <div class="desc"><code>electron-builder</code> with <code>asar: true</code> and a careful <code>files</code> glob. Do not ship the entire monorepo. Native modules (anything compiled against Node's V8) must be rebuilt against Electron's Node version.</div>
+      </li>
+      <li>
+        <div class="name">Code signing</div>
+        <div class="desc">macOS requires an Apple Developer ID and notarization for Gatekeeper to stop warning users. Windows wants an EV certificate for SmartScreen. Approximate annual cost: ~$99 for Apple, ~$300+ for an EV cert. Set up in CI before the first public beta. Skipping this means users see warnings; many will not click through.</div>
+      </li>
+      <li>
+        <div class="name">Auto-update</div>
+        <div class="desc"><code>electron-updater</code> is the practical default. Squirrel.Mac, NSIS for Windows, AppImage for Linux. Decide a channel strategy (stable / beta / canary) before the first release — moving channels later is harder than picking them up front.</div>
+      </li>
+      <li>
+        <div class="name">Pi binary distribution</div>
+        <div class="desc">Two options: require Pi to be installed and on the user's <code>$PATH</code>, or bundle a copy of it. Bundling means you ship Pi updates with app updates and own its runtime requirements. For remote machines the question recurses — does the remote host have Pi installed at all?</div>
+      </li>
+      <li>
+        <div class="name">Pi version compatibility</div>
+        <div class="desc">Pin the Pi version you build against. On RPC subprocess startup, check the version Pi reports matches what your <code>RpcBackend</code> expects. On mismatch, surface a clear upgrade prompt rather than crashing later when an unrecognized event shape arrives.</div>
+      </li>
+      <li>
+        <div class="name">Crash reporting</div>
+        <div class="desc">Electron's <code>crashReporter</code> is built in. Sentry, Crashlytics, or a self-hosted endpoint behind it. Configure before you ship a single beta build — crashes you cannot see are not crashes you can fix.</div>
+      </li>
+      <li>
+        <div class="name">Telemetry and privacy</div>
+        <div class="desc">Coding agents see proprietary code. Default everything to opt-in. Document precisely what (if anything) leaves the machine. Ship a privacy page. Local-first earns trust; anything else has to be argued for explicitly in the UI.</div>
+      </li>
+      <li>
+        <div class="name">Platform parity</div>
+        <div class="desc">SSH behaves differently across operating systems. Windows ships OpenSSH but key paths, agent forwarding, and <code>~/.ssh/config</code> parsing all have edge cases. Path separators bite constantly. Test on macOS, Windows, and Linux from week one — not before release.</div>
+      </li>
+    </ul>
+  </section>
+
+  <section id="testing">
+    <h2 class="section-title"><span class="num">xiii.</span> Testing strategy</h2>
+    <p>The agent is non-deterministic; traditional snapshot tests fail in odd ways. Three layers, each with a different fidelity-to-reality tradeoff.</p>
+
+    <ul class="components">
+      <li>
+        <div class="name">Unit</div>
+        <div class="desc">Each <code>AgentBackend</code> implementation tested against a mocked LLM. Verify the contract — events fire, queues queue, abort aborts, dispose cleans up. Fast and deterministic.</div>
+      </li>
+      <li>
+        <div class="name">Integration</div>
+        <div class="desc">Real model, real network. Assert event <em>shape</em>, not content — a tool was called, a message arrived, the session compacted. Not flaky once you stop asserting on exact text.</div>
+      </li>
+      <li>
+        <div class="name">End-to-end</div>
+        <div class="desc">Playwright driving the actual Electron app against a real Pi subprocess. At least one path must exercise an SSH connection — a local Docker container running <code>sshd</code> works fine in CI and catches most cross-machine bugs early.</div>
+      </li>
+    </ul>
+
+    <p>The IPC boundary is the cleanest seam: renderer tests mock the backend entirely; backend tests do not need a renderer. Optimizing for that cut keeps test runtimes manageable as the surface area grows.</p>
+  </section>
+
+  <section id="starting-order">
+    <h2 class="section-title"><span class="num">xiv.</span> Recommended starting order</h2>
+    <p>The architecture suggests a buildable system. This is the order to actually build it in, prioritized by what is hardest to retrofit and what most unblocks the next decision.</p>
+
+    <ol class="steps">
+      <li><p><strong>Electron security baseline.</strong> Context isolation, sandboxed renderer, typed preload, CSP. The only items on this list you cannot easily change later without a security review.</p></li>
+      <li><p><strong>The <code>AgentBackend</code> interface and a <code>MockBackend</code>.</strong> Design the contract before either real implementation. Build the entire renderer against the mock — the renderer team can move while the backend work proceeds in parallel.</p></li>
+      <li><p><strong><code>LocalSdkBackend</code> with one model.</strong> Ship a working local-only app to yourself and one teammate. Most product decisions become legible only once something actually works.</p></li>
+      <li><p><strong>Logging, diagnostics, and crash reporting.</strong> Before real users, not after. The first user bug you cannot reproduce will teach you why this belongs early.</p></li>
+      <li><p><strong>Code signing pipeline in CI.</strong> Set up once, ignore for years. Required before any public beta. Trying to add this under release pressure is its own special kind of bad week.</p></li>
+      <li><p><strong>RPC backend against a local subprocess.</strong> Verify protocol parity with the SDK backend — every interface method should produce equivalent results through either path. No SSH yet.</p></li>
+      <li><p><strong>SSH transport.</strong> Now that everything else works.</p></li>
+    </ol>
+
+    <div class="callout">The architecture is the easy part. The substrate is where most teams discover, two months in, what they should have built first.</div>
+  </section>
+
+  <section id="risks">
+    <h2 class="section-title"><span class="num">xv.</span> Risks and open questions</h2>
+    <dl class="risks">
+      <dt>Custom tools do not cross SSH.</dt>
+      <dd>Tools defined inline with <code>defineTool()</code> only work in the SDK backend. For remote workspaces we either (a) ship those tools as on-disk extensions on the remote host, or (b) route them back to the GUI through the Extension UI sub-protocol. Decide per tool; document the contract.</dd>
+
+      <dt>Stdio framing is strict.</dt>
+      <dd>Pi's RPC mode splits records on <code>\n</code> only — Node's <code>readline</code> also splits on <code>U+2028</code> / <code>U+2029</code>, which are legal inside JSON strings. We must use a manual buffer-and-split reader.</dd>
+
+      <dt>SSH connection lifecycle.</dt>
+      <dd>The agent process dies when the SSH connection drops. We need a clear UX for: lost connection mid-stream, key authentication prompts, hung subprocess, and resuming a session whose persisted file lives on the remote box.</dd>
+
+      <dt>Streaming latency over two hops.</dt>
+      <dd>Tokens travel: remote pi → SSH → main process → IPC → renderer. Each hop adds milliseconds. Should be unproblematic for chat-scale streaming; measure on a real long-haul connection before declaring done.</dd>
+
+      <dt>Where do sessions live?</dt>
+      <dd>Pi persists sessions as JSONL files next to the agent. For remote workspaces, sessions live on the remote machine. Listing, switching, and forking must work the same way in both modes — likely via the existing <code>switch_session</code> / <code>fork</code> RPC commands.</dd>
+
+      <dt>Auth storage and API keys.</dt>
+      <dd>The SDK reads keys from <code>~/.pi/agent/auth.json</code> or environment variables. In RPC-over-SSH mode, those keys must exist on the remote machine, not the local one — or be injected per-session. Decide policy before shipping remote support.</dd>
+    </dl>
+  </section>
+
+  <section id="references">
+    <h2 class="section-title"><span class="num">xvi.</span> References</h2>
+    <ul class="components">
+      <li>
+        <div class="name">SDK docs</div>
+        <div class="desc"><a href="https://pi.dev/docs/latest/sdk" style="color: var(--rust); text-decoration: none; border-bottom: 1px dashed var(--rule);">pi.dev/docs/latest/sdk</a> — programmatic API, <code>AgentSession</code>, custom tools, extensions, session management.</div>
+      </li>
+      <li>
+        <div class="name">RPC docs</div>
+        <div class="desc"><a href="https://pi.dev/docs/latest/rpc" style="color: var(--rust); text-decoration: none; border-bottom: 1px dashed var(--rule);">pi.dev/docs/latest/rpc</a> — JSON protocol over stdio, commands and events, Extension UI sub-protocol, framing rules.</div>
+      </li>
+      <li>
+        <div class="name">Source</div>
+        <div class="desc"><a href="https://github.com/earendil-works/pi" style="color: var(--rust); text-decoration: none; border-bottom: 1px dashed var(--rule);">github.com/earendil-works/pi</a> — coding agent monorepo.</div>
+      </li>
+      <li>
+        <div class="name">npm package</div>
+        <div class="desc"><code>@earendil-works/pi-coding-agent</code></div>
+      </li>
+    </ul>
+  </section>
+
+  <footer>
+    <div>Pi Coding Agent · Electron GUI · Architecture Plan</div>
+    <div>v0.1 draft</div>
+  </footer>
+
+</div>
+</body>
+</html>
