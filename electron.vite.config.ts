@@ -27,8 +27,15 @@ export default defineConfig({
     },
     build: {
       outDir: 'out/preload',
+      // Sandboxed preload must be loaded as CJS — Electron does not execute
+      // .mjs preloads with sandbox: true. Force CJS output + .js extension.
       rollupOptions: {
         input: { index: resolve(__dirname, 'src/preload/index.ts') },
+        output: {
+          format: 'cjs',
+          entryFileNames: '[name].js',
+          inlineDynamicImports: true,
+        },
       },
     },
   },

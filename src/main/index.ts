@@ -43,8 +43,14 @@ function buildCsp(): string {
     'form-action': ["'none'"],
   };
   if (isDev) {
-    // Vite injects its HMR client; relax connect-src only.
-    base['connect-src']?.push('ws://localhost:5173', 'http://localhost:5173');
+    // Vite injects its HMR client; relax connect-src only. Port is variable
+    // because electron-vite may shift up if 5173 is in use.
+    base['connect-src']?.push(
+      'ws://localhost:*',
+      'http://localhost:*',
+      'ws://127.0.0.1:*',
+      'http://127.0.0.1:*',
+    );
     base['style-src']?.push("'unsafe-inline'"); // Vite-injected styles in dev only
     base['script-src']?.push("'self'");
   }
@@ -91,7 +97,8 @@ function createWindow(): BrowserWindow {
 
   // Block in-page navigation to anything off-origin.
   win.webContents.on('will-navigate', (event, url) => {
-    const allowed = isDev ? 'http://localhost:5173' : 'file://';
+    const devUrl = process.env['ELECTRON_RENDERER_URL'];
+    const allowed = isDev && devUrl ? devUrl : 'file://';
     if (!url.startsWith(allowed)) {
       event.preventDefault();
       if (/^https?:\/\//.test(url)) void shell.openExternal(url);

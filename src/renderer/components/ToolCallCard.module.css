@@ -1,0 +1,117 @@
+.card {
+  margin-top: 8px;
+  border: 1px solid var(--border);
+  border-radius: 9px;
+  background: var(--surface-2);
+  overflow: hidden;
+  box-shadow: var(--shadow-sm);
+}
+.card + .card {
+  margin-top: 6px;
+}
+
+.head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 7px 10px;
+  font-family: var(--mono);
+  font-size: 12px;
+  color: var(--ink-2);
+  cursor: pointer;
+  user-select: none;
+}
+.head:hover {
+  background: color-mix(in srgb, var(--ink) 3%, transparent);
+}
+
+.chev {
+  color: var(--ink-4);
+  flex: 0 0 12px;
+  transition: transform 0.12s;
+}
+.chevOpen {
+  transform: rotate(90deg);
+}
+
+.icon {
+  color: var(--ink-3);
+  flex: 0 0 13px;
+}
+.name {
+  color: var(--ink);
+  font-weight: 600;
+}
+.arg {
+  color: var(--ink-3);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  max-width: 320px;
+}
+
+.stats {
+  display: inline-flex;
+  gap: 6px;
+  margin-left: 4px;
+}
+.add {
+  color: var(--add);
+}
+.del {
+  color: var(--del);
+}
+
+.status {
+  font-size: 11px;
+  margin-left: auto;
+}
+.ok {
+  color: var(--ok);
+}
+.error {
+  color: var(--err);
+}
+.run {
+  color: var(--accent);
+}
+
+.dots {
+  width: 14px;
+  height: 6px;
+  display: inline-block;
+  background: radial-gradient(
+      circle at 2px center,
+      currentColor 1.5px,
+      transparent 2px
+    ),
+    radial-gradient(circle at 7px center, currentColor 1.5px, transparent 2px),
+    radial-gradient(circle at 12px center, currentColor 1.5px, transparent 2px);
+  opacity: 0.85;
+  animation: pi-pulse 1.2s ease-in-out infinite;
+}
+
+.time {
+  margin-left: 8px;
+  font-size: 11px;
+  color: var(--ink-4);
+  font-variant-numeric: tabular-nums;
+  min-width: 38px;
+  text-align: right;
+}
+
+.body {
+  border-top: 1px solid var(--border);
+  background: color-mix(in srgb, var(--surface-sunken) 60%, var(--surface-2));
+  font-family: var(--mono);
+  font-size: 12px;
+  max-height: 280px;
+  overflow-y: auto;
+}
+.pre {
+  margin: 0;
+  padding: 10px 14px;
+  line-height: 1.55;
+  color: var(--ink-2);
+  white-space: pre;
+}

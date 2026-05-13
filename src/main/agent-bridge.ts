@@ -123,7 +123,7 @@ export async function installAgentBridge(): Promise<void> {
   ipcMain.handle(IPC.Meta, async (): Promise<AppMeta> => ({
     backend: backendMeta.kind,
     version: backendMeta.version,
-    platform: process.platform,
+    platform: process.platform as AppMeta['platform'],
   }));
 }
 

@@ -1,0 +1,46 @@
+.shell {
+  width: 100vw;
+  height: 100vh;
+  display: flex;
+  align-items: stretch;
+  justify-content: stretch;
+  padding: 0;
+}
+
+.window {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  background: var(--surface);
+  overflow: hidden;
+  border: 1px solid var(--border);
+}
+
+.body {
+  flex: 1;
+  min-height: 0;
+  display: grid;
+  grid-template-columns: 260px 1fr;
+}
+.bodyNoSidebar {
+  grid-template-columns: 0 1fr;
+}
+.bodyWithRight {
+  grid-template-columns: 260px 1fr 360px;
+}
+.bodyNoSidebar.bodyWithRight {
+  grid-template-columns: 0 1fr 360px;
+}
+
+.bootShell {
+  width: 100vw;
+  height: 100vh;
+  background: var(--bg);
+}
+
+/* On macOS the OS title bar overlays the top 38px; the renderer reserves the
+   drag region via webkit-app-region but the decorative traffic lights are
+   hidden because the real ones live there. */
+:global([data-platform='darwin']) .window {
+  border: 0;
+}

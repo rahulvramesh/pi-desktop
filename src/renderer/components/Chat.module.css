@@ -1,0 +1,326 @@
+.chat {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  min-width: 0;
+  background: var(--surface);
+  position: relative;
+}
+
+.header {
+  flex: 0 0 auto;
+  padding: 10px 16px;
+  border-bottom: 1px solid var(--border);
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  background: var(--surface);
+}
+.iconBtn {
+  appearance: none;
+  border: 0;
+  background: transparent;
+  width: 26px;
+  height: 26px;
+  border-radius: 6px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--ink-2);
+  cursor: pointer;
+}
+.iconBtn:hover {
+  background: color-mix(in srgb, var(--ink) 7%, transparent);
+  color: var(--ink);
+}
+.headerMeta {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  flex: 1;
+}
+.title {
+  font-weight: 600;
+  font-size: 13.5px;
+  color: var(--ink);
+}
+.subPath {
+  font-family: var(--mono);
+  font-size: 11px;
+  color: var(--ink-3);
+  margin-top: 2px;
+}
+
+.stream {
+  flex: 1;
+  min-height: 0;
+  min-width: 0;
+  overflow-y: auto;
+  overflow-x: hidden;
+  padding: 24px 0;
+}
+.inner {
+  max-width: 760px;
+  margin: 0 auto;
+  padding: 0 28px;
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+}
+
+.runStart {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--ink-3);
+  font-size: 11.5px;
+}
+.runStartRule {
+  flex: 1;
+  height: 1px;
+  background: var(--border);
+}
+.runStartText {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  font-family: var(--mono);
+}
+
+.empty {
+  text-align: center;
+  padding: 60px 20px;
+  color: var(--ink-3);
+}
+.empty h2 {
+  font-family: var(--serif);
+  font-style: italic;
+  font-weight: 400;
+  font-size: 36px;
+  color: var(--ink);
+  margin: 0 0 12px;
+}
+.empty p {
+  margin: 0 auto;
+  max-width: 520px;
+  font-size: 14px;
+  line-height: 1.55;
+}
+
+.msg {
+  display: flex;
+  gap: 12px;
+}
+.avatar {
+  flex: 0 0 28px;
+  width: 28px;
+  height: 28px;
+  border-radius: 8px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 12px;
+  font-weight: 600;
+  margin-top: 1px;
+}
+.user .avatar {
+  background: var(--surface-sunken);
+  color: var(--ink-2);
+  border: 1px solid var(--border);
+}
+.agent .avatar {
+  background: var(--accent);
+  color: white;
+  font-family: var(--serif);
+  font-size: 16px;
+  font-style: italic;
+  font-weight: 400;
+}
+.body {
+  flex: 1;
+  min-width: 0;
+  padding-top: 2px;
+}
+.meta {
+  font-size: 11.5px;
+  color: var(--ink-3);
+  margin-bottom: 4px;
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+.meta b {
+  color: var(--ink-2);
+  font-weight: 600;
+}
+.text {
+  font-size: 14px;
+  line-height: 1.55;
+  color: var(--ink);
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+.thinking {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-family: var(--mono);
+  font-size: 11px;
+  color: var(--accent);
+}
+.tdots {
+  display: inline-flex;
+  gap: 3px;
+}
+.tdots span {
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  background: currentColor;
+  opacity: 0.3;
+  animation: pi-pulse 1.2s ease-in-out infinite;
+}
+.tdots span:nth-child(2) {
+  animation-delay: 0.15s;
+}
+.tdots span:nth-child(3) {
+  animation-delay: 0.3s;
+}
+
+.errorBanner {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 14px;
+  margin: 0 28px;
+  border: 1px solid color-mix(in srgb, var(--err) 30%, transparent);
+  background: var(--err-soft);
+  color: var(--err);
+  border-radius: 8px;
+  font-size: 12px;
+}
+.errorBanner button {
+  margin-left: auto;
+  background: transparent;
+  border: 0;
+  color: inherit;
+  cursor: pointer;
+  font-size: 14px;
+}
+
+/* Composer */
+.composerWrap {
+  flex: 0 0 auto;
+  padding: 0 28px 20px;
+  background: linear-gradient(180deg, transparent, var(--surface) 30%);
+}
+.composer {
+  max-width: 760px;
+  margin: 0 auto;
+  background: var(--surface-2);
+  border: 1px solid var(--border-strong);
+  border-radius: 14px;
+  box-shadow: var(--shadow-md);
+  overflow: hidden;
+  transition: border-color 0.15s, box-shadow 0.15s;
+}
+.composer:focus-within {
+  border-color: var(--accent-edge);
+  box-shadow: 0 0 0 3px var(--accent-soft), var(--shadow-md);
+}
+.textarea {
+  width: 100%;
+  resize: none;
+  border: 0;
+  outline: 0;
+  background: transparent;
+  padding: 12px 14px 4px;
+  font: 400 14px/1.55 var(--sans);
+  color: var(--ink);
+  min-height: 56px;
+}
+.textarea::placeholder {
+  color: var(--ink-4);
+}
+
+.foot {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 10px 10px 12px;
+  font-size: 11.5px;
+  color: var(--ink-3);
+}
+.picker {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 3px 8px;
+  border-radius: 6px;
+}
+.modelText {
+  font-family: var(--mono);
+  color: var(--ink-2);
+  font-weight: 500;
+}
+.iconMuted {
+  color: var(--ink-3);
+}
+.spacer {
+  flex: 1;
+}
+.shortcuts {
+  color: var(--ink-3);
+  font-size: 11px;
+}
+.shortcuts kbd {
+  font-family: var(--mono);
+  font-size: 10.5px;
+  padding: 1px 5px;
+  border-radius: 4px;
+  background: color-mix(in srgb, var(--ink) 6%, transparent);
+  color: var(--ink-2);
+  border: 1px solid var(--border);
+}
+
+.btn {
+  appearance: none;
+  border: 1px solid var(--border);
+  background: var(--surface-2);
+  color: var(--ink);
+  height: 30px;
+  padding: 0 12px;
+  border-radius: 7px;
+  font: 500 12.5px/1 var(--sans);
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  box-shadow: var(--shadow-sm);
+  transition: all 0.15s;
+}
+.btn:hover {
+  border-color: var(--border-strong);
+}
+.btn:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+.btnSm {
+  height: 24px;
+  padding: 0 8px;
+  font-size: 11.5px;
+  border-radius: 6px;
+}
+.primary {
+  background: var(--accent);
+  color: white;
+  border-color: color-mix(in srgb, var(--accent) 70%, black);
+  box-shadow:
+    0 1px 0 rgba(0, 0, 0, 0.08),
+    0 1px 0 rgba(255, 255, 255, 0.25) inset;
+}
+.primary:hover {
+  background: color-mix(in srgb, var(--accent) 92%, black);
+}

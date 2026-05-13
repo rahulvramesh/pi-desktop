@@ -1,0 +1,106 @@
+/* Pi Desktop — design tokens. Lifted verbatim from the design bundle.
+   Dark mode pairs ship in the same file under [data-theme="dark"]. */
+
+:root {
+  /* Paper */
+  --bg: #f4f1ea;
+  --surface: #faf8f3;
+  --surface-2: #ffffff;
+  --surface-sunken: #ece8de;
+  --border: #e2dccd;
+  --border-strong: #c9c1ad;
+
+  /* Ink */
+  --ink: #1c1a16;
+  --ink-2: #44403a;
+  --ink-3: #7a756a;
+  --ink-4: #a8a293;
+
+  /* Accent (runtime-themable) */
+  --accent: #c84a1f;
+  --accent-2: #e26a3b;
+  --accent-soft: rgba(200, 74, 31, 0.1);
+  --accent-edge: rgba(200, 74, 31, 0.28);
+
+  /* Semantic */
+  --ok: #3e7a4a;
+  --ok-soft: rgba(62, 122, 74, 0.1);
+  --warn: #b07a16;
+  --warn-soft: rgba(176, 122, 22, 0.1);
+  --err: #b3361a;
+  --err-soft: rgba(179, 54, 26, 0.1);
+  --info: #2e5e9c;
+  --info-soft: rgba(46, 94, 156, 0.1);
+
+  /* Diff */
+  --add: #2f6d3d;
+  --add-bg: rgba(47, 109, 61, 0.08);
+  --del: #a8331a;
+  --del-bg: rgba(168, 51, 26, 0.08);
+
+  /* Type */
+  --sans: 'Geist', ui-sans-serif, system-ui, -apple-system, 'Segoe UI', sans-serif;
+  --mono: 'Geist Mono', 'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, monospace;
+  --serif: 'Instrument Serif', 'Iowan Old Style', 'Apple Garamond', Georgia, serif;
+
+  /* Radii */
+  --r-sm: 6px;
+  --r-md: 8px;
+  --r-lg: 12px;
+  --r-xl: 16px;
+
+  /* Density-driven sizing (overridden by [data-density]) */
+  --pad-x: 14px;
+  --pad-y: 12px;
+  --row-h: 30px;
+  --gap: 10px;
+
+  /* Shadows */
+  --shadow-sm: 0 1px 0 rgba(0, 0, 0, 0.02), 0 1px 2px rgba(28, 26, 22, 0.04);
+  --shadow-md: 0 1px 0 rgba(0, 0, 0, 0.02), 0 4px 14px rgba(28, 26, 22, 0.07);
+  --shadow-lg: 0 1px 0 rgba(0, 0, 0, 0.02), 0 18px 48px rgba(28, 26, 22, 0.12);
+  --shadow-window:
+    0 0 0 1px rgba(28, 26, 22, 0.06), 0 20px 60px rgba(28, 26, 22, 0.18),
+    0 80px 120px rgba(28, 26, 22, 0.1);
+}
+
+[data-theme='dark'] {
+  --bg: #16140f;
+  --surface: #1c1a14;
+  --surface-2: #221f18;
+  --surface-sunken: #100e0a;
+  --border: #2c2820;
+  --border-strong: #3d382c;
+  --ink: #f1ece1;
+  --ink-2: #c4bdac;
+  --ink-3: #8a8475;
+  --ink-4: #5b5648;
+
+  --accent-soft: rgba(226, 106, 59, 0.14);
+  --accent-edge: rgba(226, 106, 59, 0.36);
+
+  --ok-soft: rgba(95, 168, 110, 0.14);
+  --warn-soft: rgba(214, 158, 50, 0.14);
+  --err-soft: rgba(214, 86, 60, 0.14);
+  --info-soft: rgba(108, 152, 210, 0.14);
+
+  --add-bg: rgba(95, 168, 110, 0.12);
+  --del-bg: rgba(214, 86, 60, 0.12);
+
+  --shadow-window:
+    0 0 0 1px rgba(0, 0, 0, 0.6), 0 20px 60px rgba(0, 0, 0, 0.45),
+    0 80px 120px rgba(0, 0, 0, 0.35);
+}
+
+[data-density='compact'] {
+  --row-h: 26px;
+  --pad-x: 10px;
+  --pad-y: 8px;
+  --gap: 8px;
+}
+[data-density='comfy'] {
+  --row-h: 34px;
+  --pad-x: 16px;
+  --pad-y: 14px;
+  --gap: 12px;
+}

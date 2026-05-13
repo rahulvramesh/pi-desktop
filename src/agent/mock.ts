@@ -220,6 +220,7 @@ export class MockBackend implements AgentBackend {
   };
   private currentTimer: ReturnType<typeof setTimeout> | null = null;
   private currentAbort: AbortController | null = null;
+  private currentResolve: (() => void) | null = null;
   private readonly speed: number;
 
   constructor(options: MockBackendOptions = {}) {
@@ -254,6 +255,9 @@ export class MockBackend implements AgentBackend {
       return this.steer(text);
     }
 
+    // Record the user message in our history but do not echo it back via
+    // message_start — the renderer is authoritative for user messages it
+    // composed itself; broadcasting would cause a duplicate render.
     const userMessage: AgentMessage = {
       id: `u-${Date.now()}`,
       role: 'user',
@@ -262,8 +266,6 @@ export class MockBackend implements AgentBackend {
       toolCalls: [],
     };
     this.messages.push(userMessage);
-    this.emit({ type: 'message_start', message: userMessage });
-    this.emit({ type: 'message_end', messageId: userMessage.id });
 
     this.emit({ type: 'agent_start' });
     this.setRunState('thinking');
@@ -281,8 +283,10 @@ export class MockBackend implements AgentBackend {
     let stepIndex = 0;
 
     return new Promise<void>((resolve) => {
+      this.currentResolve = resolve;
       const runNext = (): void => {
         if (abort.signal.aborted) {
+          this.currentResolve = null;
           resolve();
           return;
         }
@@ -292,6 +296,7 @@ export class MockBackend implements AgentBackend {
           this.emit({ type: 'agent_end' });
           this.currentAbort = null;
           this.currentTimer = null;
+          this.currentResolve = null;
           resolve();
           return;
         }
@@ -378,6 +383,12 @@ export class MockBackend implements AgentBackend {
     }
     this.setRunState('idle');
     this.emit({ type: 'agent_end' });
+    // Resolve any in-flight prompt() so callers awaiting it unblock.
+    if (this.currentResolve) {
+      const resolve = this.currentResolve;
+      this.currentResolve = null;
+      resolve();
+    }
   }
 
   async getState(): Promise<AgentState> {

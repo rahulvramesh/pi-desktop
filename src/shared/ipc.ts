@@ -35,10 +35,27 @@ export const IPC = {
   Meta: 'meta:get',
 } as const;
 
+/**
+ * Process platform identifiers. Mirrors Node's `NodeJS.Platform` but kept
+ * inline because @shared is imported from the renderer (no Node types there).
+ */
+export type AppPlatform =
+  | 'aix'
+  | 'android'
+  | 'darwin'
+  | 'freebsd'
+  | 'haiku'
+  | 'linux'
+  | 'openbsd'
+  | 'sunos'
+  | 'win32'
+  | 'cygwin'
+  | 'netbsd';
+
 export interface AppMeta {
   backend: 'mock' | 'sdk-local' | 'rpc-local' | 'rpc-ssh';
   version: string;
-  platform: NodeJS.Platform;
+  platform: AppPlatform;
 }
 
 export interface PrefsShape {
