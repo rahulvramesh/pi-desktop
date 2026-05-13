@@ -42,11 +42,17 @@
   display: flex;
   gap: 8px;
   padding: 0 4px 0 2px;
+  -webkit-app-region: no-drag;
+}
+.trafficLights:hover .tlIcon {
+  opacity: 1;
 }
 /* macOS renders the real traffic lights via titleBarStyle: 'hiddenInset'. */
 :global([data-platform='darwin']) .trafficLights {
-  visibility: hidden;
-  padding-left: 64px;
+  display: none;
+}
+:global([data-platform='darwin']) .titlebar {
+  padding-left: 80px;
 }
 
 .tl {
@@ -54,7 +60,19 @@
   height: 12px;
   border-radius: 50%;
   border: 0.5px solid rgba(0, 0, 0, 0.18);
-  display: inline-block;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  cursor: pointer;
+  position: relative;
+  appearance: none;
+  font: inherit;
+  color: rgba(0, 0, 0, 0.6);
+}
+.tl:focus-visible {
+  outline: 1px solid var(--accent);
+  outline-offset: 1px;
 }
 .tlRed {
   background: #ff5f57;
@@ -64,6 +82,19 @@
 }
 .tlGreen {
   background: #28c840;
+}
+.tlIcon {
+  font-size: 11px;
+  line-height: 1;
+  font-weight: 600;
+  opacity: 0;
+  transition: opacity 0.12s;
+  pointer-events: none;
+  font-family:
+    ui-sans-serif,
+    system-ui,
+    -apple-system,
+    sans-serif;
 }
 
 .iconBtn {

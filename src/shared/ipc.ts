@@ -33,6 +33,11 @@ export const IPC = {
   PrefsSet: 'prefs:set',
 
   Meta: 'meta:get',
+
+  WinMinimize: 'win:minimize',
+  WinMaximizeToggle: 'win:maximize-toggle',
+  WinClose: 'win:close',
+  WinIsMaximizedChanged: 'win:is-maximized-changed',
 } as const;
 
 /**
@@ -105,6 +110,14 @@ export interface PiApi {
 
   /** Diagnostic info surfaced in the renderer footer. */
   meta(): Promise<AppMeta>;
+
+  /** Window controls. Renderer uses these because the OS frame is hidden. */
+  window: {
+    minimize(): Promise<void>;
+    maximizeToggle(): Promise<boolean>;
+    close(): Promise<void>;
+    onMaximizedChange(listener: (isMaximized: boolean) => void): () => void;
+  };
 }
 
 declare global {

@@ -10,12 +10,13 @@
  *   - new BrowserWindow / window.open denied
  */
 
-import { app, BrowserWindow, session, shell } from 'electron';
+import { app, BrowserWindow, ipcMain, session, shell } from 'electron';
 import { fileURLToPath } from 'node:url';
 import { dirname, join } from 'node:path';
 
 import { installAgentBridge, disposeAgentBridge } from './agent-bridge.js';
 import { installPrefsBridge } from './prefs-bridge.js';
+import { IPC } from '../shared/ipc.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
@@ -71,6 +72,7 @@ function applyCsp(): void {
 }
 
 function createWindow(): BrowserWindow {
+  const isMac = process.platform === 'darwin';
   const win = new BrowserWindow({
     width: 1480,
     height: 940,
@@ -78,7 +80,12 @@ function createWindow(): BrowserWindow {
     minHeight: 600,
     show: false,
     backgroundColor: '#f4f1ea',
-    titleBarStyle: process.platform === 'darwin' ? 'hiddenInset' : 'default',
+    // macOS keeps native traffic lights via hiddenInset; other platforms are
+    // fully frameless and rely on the renderer's title bar (which has
+    // -webkit-app-region: drag set and our own minimize/maximize/close).
+    ...(isMac
+      ? ({ titleBarStyle: 'hiddenInset' as const } as const)
+      : ({ frame: false } as const)),
     autoHideMenuBar: true,
     webPreferences: {
       preload: join(__dirname, '../preload/index.js'),
@@ -90,6 +97,14 @@ function createWindow(): BrowserWindow {
       spellcheck: false,
     },
   });
+
+  const broadcastMaximized = () => {
+    if (!win.isDestroyed()) {
+      win.webContents.send(IPC.WinIsMaximizedChanged, win.isMaximized());
+    }
+  };
+  win.on('maximize', broadcastMaximized);
+  win.on('unmaximize', broadcastMaximized);
 
   // Deny new windows; route to OS browser instead.
   win.webContents.setWindowOpenHandler(({ url }) => {
@@ -118,9 +133,27 @@ function createWindow(): BrowserWindow {
   return win;
 }
 
+function installWindowControlBridge(): void {
+  const focused = () => BrowserWindow.getFocusedWindow() ?? BrowserWindow.getAllWindows()[0];
+  ipcMain.handle(IPC.WinMinimize, async () => {
+    focused()?.minimize();
+  });
+  ipcMain.handle(IPC.WinMaximizeToggle, async (): Promise<boolean> => {
+    const w = focused();
+    if (!w) return false;
+    if (w.isMaximized()) w.unmaximize();
+    else w.maximize();
+    return w.isMaximized();
+  });
+  ipcMain.handle(IPC.WinClose, async () => {
+    focused()?.close();
+  });
+}
+
 void app.whenReady().then(async () => {
   applyCsp();
   installPrefsBridge();
+  installWindowControlBridge();
   await installAgentBridge();
 
   createWindow();

@@ -39,6 +39,12 @@ ipcRenderer.on(IPC.Event, (_e, payload: WireEvent) => {
   for (const l of Array.from(listeners)) l(payload);
 });
 
+type MaxListener = (isMaximized: boolean) => void;
+const maxListeners = new Set<MaxListener>();
+ipcRenderer.on(IPC.WinIsMaximizedChanged, (_e, isMaximized: boolean) => {
+  for (const l of Array.from(maxListeners)) l(isMaximized);
+});
+
 const pi: PiApi = {
   prompt: (text: string, options?: PromptOptions) => ipcRenderer.invoke(IPC.Prompt, text, options),
   steer: (text: string) => ipcRenderer.invoke(IPC.Steer, text),
@@ -63,6 +69,17 @@ const pi: PiApi = {
     set: (patch: Partial<PrefsShape>): Promise<PrefsShape> => ipcRenderer.invoke(IPC.PrefsSet, patch),
   },
   meta: () => ipcRenderer.invoke(IPC.Meta),
+  window: {
+    minimize: () => ipcRenderer.invoke(IPC.WinMinimize),
+    maximizeToggle: () => ipcRenderer.invoke(IPC.WinMaximizeToggle) as Promise<boolean>,
+    close: () => ipcRenderer.invoke(IPC.WinClose),
+    onMaximizedChange(listener: MaxListener) {
+      maxListeners.add(listener);
+      return () => {
+        maxListeners.delete(listener);
+      };
+    },
+  },
 };
 
 contextBridge.exposeInMainWorld('pi', pi);

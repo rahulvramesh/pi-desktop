@@ -26,11 +26,38 @@ export function TitleBar() {
   return (
     <div className={styles.titlebar}>
       <div className={styles.left}>
-        {/* Decorative traffic lights (real ones live on macOS native title bar). */}
-        <div className={styles.trafficLights}>
-          <span className={`${styles.tl} ${styles.tlRed}`} />
-          <span className={`${styles.tl} ${styles.tlYellow}`} />
-          <span className={`${styles.tl} ${styles.tlGreen}`} />
+        {/* Custom traffic lights — wired to OS window controls since the
+            native frame is hidden. On macOS the system renders its own set
+            in this slot via titleBarStyle: 'hiddenInset'; we hide these via
+            [data-platform='darwin']. */}
+        <div className={styles.trafficLights} role="group" aria-label="Window controls">
+          <button
+            type="button"
+            className={`${styles.tl} ${styles.tlRed}`}
+            onClick={() => void window.pi.window.close()}
+            aria-label="Close window"
+            title="Close"
+          >
+            <span className={styles.tlIcon}>×</span>
+          </button>
+          <button
+            type="button"
+            className={`${styles.tl} ${styles.tlYellow}`}
+            onClick={() => void window.pi.window.minimize()}
+            aria-label="Minimize window"
+            title="Minimize"
+          >
+            <span className={styles.tlIcon}>–</span>
+          </button>
+          <button
+            type="button"
+            className={`${styles.tl} ${styles.tlGreen}`}
+            onClick={() => void window.pi.window.maximizeToggle()}
+            aria-label="Maximize window"
+            title="Maximize"
+          >
+            <span className={styles.tlIcon}>+</span>
+          </button>
         </div>
         <button
           className={styles.iconBtn}
