@@ -7,42 +7,39 @@
  */
 
 import { ipcMain } from 'electron';
-import ElectronStoreCtor from 'electron-store';
 
 import { IPC, PREFS_DEFAULTS, type PrefsShape } from '../shared/ipc.js';
 
-// electron-store exports a CJS-default class; under ESM bundling this lands as
-// { default } or directly as the constructor depending on the bundler. Handle both.
-const Store = (
-  (ElectronStoreCtor as unknown as { default?: typeof ElectronStoreCtor }).default ??
-  ElectronStoreCtor
-) as new <T>(opts?: { name?: string; defaults?: T }) => {
+// electron-store is loaded lazily: Electron's bundled Node (v20.18.3) chokes
+// while preparsing one of conf's transitive CJS deps at static-import time
+// (`cjsPreparseModuleExports` -> "Cannot read properties of undefined").
+// Dynamic-importing inside the handler defers it past the preparse step.
+type StoreCtor = new <T>(opts?: { name?: string; defaults?: T }) => {
   store: T;
   get<K extends keyof T>(key: K): T[K];
   set(key: keyof T | Partial<T>, value?: unknown): void;
 };
 
-let store: ReturnType<typeof newStore> | null = null;
+let store: { store: PrefsShape; get: (k: keyof PrefsShape) => unknown; set: (k: keyof PrefsShape | Partial<PrefsShape>, v?: unknown) => void } | null = null;
 
-function newStore() {
-  return new Store<PrefsShape>({
+async function getStore() {
+  if (store) return store;
+  const mod = await import('electron-store');
+  const Ctor = (mod as unknown as { default: StoreCtor }).default ?? (mod as unknown as StoreCtor);
+  store = new Ctor<PrefsShape>({
     name: 'pi-desktop-prefs',
     defaults: PREFS_DEFAULTS,
   });
-}
-
-function getStore() {
-  if (!store) store = newStore();
   return store;
 }
 
 export function installPrefsBridge(): void {
   ipcMain.handle(IPC.PrefsGet, async (): Promise<PrefsShape> => {
-    const s = getStore();
+    const s = await getStore();
     return { ...PREFS_DEFAULTS, ...(s.store as PrefsShape) };
   });
   ipcMain.handle(IPC.PrefsSet, async (_e, patch: Partial<PrefsShape>): Promise<PrefsShape> => {
-    const s = getStore();
+    const s = await getStore();
     const current = { ...PREFS_DEFAULTS, ...(s.store as PrefsShape) };
     const next = { ...current, ...patch };
     s.set(next);

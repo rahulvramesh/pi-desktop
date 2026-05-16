@@ -7,7 +7,6 @@
  */
 
 import { MockBackend } from './mock.js';
-import { LocalSdkBackend } from './local-sdk.js';
 import type { AgentBackend, AgentBackendConfig } from './backend.js';
 
 export function resolveBackendConfig(env: NodeJS.ProcessEnv, cwd: string): AgentBackendConfig {
@@ -35,8 +34,10 @@ export async function createBackend(config: AgentBackendConfig): Promise<AgentBa
   switch (config.kind) {
     case 'mock':
       return new MockBackend();
-    case 'sdk-local':
+    case 'sdk-local': {
+      const { LocalSdkBackend } = await import('./local-sdk.js');
       return new LocalSdkBackend({ cwd: config.cwd });
+    }
     case 'rpc-local':
     case 'rpc-ssh':
       throw new Error(`RPC backends are deferred to phases 6–7; got ${config.kind}`);

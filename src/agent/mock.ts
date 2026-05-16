@@ -81,30 +81,37 @@ function buildScript(
     status: 'running',
   };
 
-  const readPreview =
-    '  1  import { Parser } from "./Parser";\n' +
-    '  2  import { LevelSchema } from "./schema";\n' +
-    '  3\n' +
-    '  4  export class Loader {\n' +
-    '  5    async load(path: string) {\n' +
-    '  6      const buf = await Bun.file(path).arrayBuffer();\n' +
-    '  7      const parsed = Parser.parse(buf);\n' +
-    '  8      return parsed.tiles;     // <- v1-only\n' +
-    '  9    }\n' +
-    ' 10  }';
+  // NB: we build the `import ... from '...'` lines via concatenation so the
+  // electron-vite CJS-shim injector does not pattern-match these mock strings
+  // as a real import site and splice its banner into the middle of the array.
+  const IMP = 'imp' + 'ort';
+  const FROM = 'fr' + 'om';
+  const readPreview = [
+    `  1  ${IMP} { Parser } ${FROM} './Parser';`,
+    `  2  ${IMP} { LevelSchema } ${FROM} './schema';`,
+    `  3`,
+    `  4  export class Loader {`,
+    `  5    async load(path: string) {`,
+    `  6      const buf = await Bun.file(path).arrayBuffer();`,
+    `  7      const parsed = Parser.parse(buf);`,
+    `  8      return parsed.tiles;     // <- v1-only`,
+    `  9    }`,
+    ` 10  }`,
+  ].join('\n');
 
-  const editPreview =
-    '  async load(path: string) {\n' +
-    '    const buf = await Bun.file(path).arrayBuffer();\n' +
-    '    const parsed = Parser.parse(buf);\n' +
-    '-   return parsed.tiles;\n' +
-    '+   if (isV2(parsed)) {\n' +
-    '+     const tilesBuf = parsed.chunks.get("TILES");\n' +
-    '+     if (!tilesBuf) throw new Error("v2 level missing TILES chunk");\n' +
-    '+     return decodeTiles(tilesBuf);\n' +
-    '+   }\n' +
-    '+   return { tiles: parsed.tiles, meta: parsed.meta };\n' +
-    '  }';
+  const editPreview = [
+    `  async load(path: string) {`,
+    `    const buf = await Bun.file(path).arrayBuffer();`,
+    `    const parsed = Parser.parse(buf);`,
+    `-   return parsed.tiles;`,
+    `+   if (isV2(parsed)) {`,
+    `+     const tilesBuf = parsed.chunks.get('TILES');`,
+    `+     if (!tilesBuf) throw new Error('v2 level missing TILES chunk');`,
+    `+     return decodeTiles(tilesBuf);`,
+    `+   }`,
+    `+   return { tiles: parsed.tiles, meta: parsed.meta };`,
+    `  }`,
+  ].join('\n');
 
   const steps: ScriptedStep[] = [];
 
