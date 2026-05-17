@@ -13,11 +13,28 @@
 import { create } from 'zustand';
 import type {
   AgentEvent,
+  AgentImageContent,
   AgentMessage,
   AgentRunState,
   AgentState,
+  MessagePart,
+  ModelInfo,
+  PromptOptions,
+  ThinkingLevel,
   ToolCallSummary,
 } from '../../agent/backend.js';
+
+export type QueuedMessageKind = 'steer' | 'followUp';
+export type QueuedMessageStatus = 'pending' | 'queued';
+
+export interface DisplayMessage extends AgentMessage {
+  queue?: {
+    kind: QueuedMessageKind;
+    status: QueuedMessageStatus;
+    text: string;
+    createdAt: number;
+  };
+}
 
 interface AgentStoreState {
   /** Latest snapshot of agent state (model, tokens, runState). */
@@ -25,16 +42,28 @@ interface AgentStoreState {
   /** Whether the agent is currently streaming a response. */
   runState: AgentRunState;
   /** Ordered chat transcript. */
-  messages: AgentMessage[];
+  messages: DisplayMessage[];
   /** Non-fatal info/error banner; consumed by chat composer footer. */
   lastError: string | null;
   /** True once subscribe() has been wired. */
   subscribed: boolean;
+  /** Models pi has configured (for the composer's model picker). */
+  models: ModelInfo[];
 
   ensureSubscribed(): void;
-  sendPrompt(text: string): Promise<void>;
+  sendPrompt(
+    text: string,
+    images?: AgentImageContent[],
+    streamingBehavior?: PromptOptions['streamingBehavior'],
+  ): Promise<void>;
   abort(): Promise<void>;
   clearError(): void;
+  /** Replace the transcript with the active chat's history (after chat:open). */
+  loadActiveChat(): Promise<void>;
+  loadModels(): Promise<void>;
+  setModel(provider: string, modelId: string): Promise<void>;
+  setThinkingLevel(level: ThinkingLevel): Promise<void>;
+  discardQueuedMessage(messageId: string): void;
 }
 
 const INITIAL_STATE: AgentState = {
@@ -44,12 +73,95 @@ const INITIAL_STATE: AgentState = {
   thinkingLevel: 'medium',
   tokensUsed: 0,
   tokensMax: 200_000,
+  tokenUsage: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, total: 0 },
+  costUsd: 0,
+  contextPercent: 0,
+  autoCompactionEnabled: true,
   sessionId: 'pending',
 };
 
 function nowHHMM(): string {
   const d = new Date();
   return `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`;
+}
+
+function cloneParts(parts: MessagePart[]): MessagePart[] {
+  return parts.map((p) => {
+    if (p.kind === 'tool') return { kind: 'tool', tool: { ...p.tool } };
+    if (p.kind === 'image') return { kind: 'image', image: { ...p.image } };
+    return { ...p };
+  });
+}
+
+/** Append a streamed delta, coalescing into the trailing part of the same kind
+ *  or opening a new part when the kind switches — this is what preserves the
+ *  true chronological order (text / thinking / tool interleaved). */
+function appendDelta(msg: DisplayMessage, kind: 'text' | 'thinking', delta: string): DisplayMessage {
+  const parts = msg.parts.slice();
+  const last = parts[parts.length - 1];
+  if (last && last.kind === kind) {
+    parts[parts.length - 1] = { kind, text: last.text + delta };
+  } else {
+    parts.push({ kind, text: delta });
+  }
+  return { ...msg, parts };
+}
+
+function withMessage(
+  state: AgentStoreState,
+  messageId: string,
+  fn: (m: DisplayMessage) => DisplayMessage,
+): Partial<AgentStoreState> {
+  const idx = state.messages.findIndex((m) => m.id === messageId);
+  if (idx < 0) return {};
+  const existing = state.messages[idx];
+  if (!existing) return {};
+  const next = state.messages.slice();
+  next[idx] = fn(existing);
+  return { messages: next };
+}
+
+function messageText(message: DisplayMessage): string {
+  return message.parts
+    .filter((p): p is Extract<MessagePart, { kind: 'text' }> => p.kind === 'text')
+    .map((p) => p.text)
+    .join('\n')
+    .trim();
+}
+
+function withoutQueue(message: DisplayMessage): DisplayMessage {
+  const { queue: _queue, ...rest } = message;
+  return rest;
+}
+
+function applyQueueUpdate(
+  state: AgentStoreState,
+  steering: string[],
+  followUp: string[],
+): Partial<AgentStoreState> {
+  const remaining: Record<QueuedMessageKind, string[]> = {
+    steer: [...steering],
+    followUp: [...followUp],
+  };
+  let changed = false;
+  const messages = state.messages.map((m) => {
+    if (!m.queue) return m;
+    const text = m.queue.text || messageText(m);
+    const queue = remaining[m.queue.kind];
+    const idx = queue.indexOf(text);
+    if (idx >= 0) {
+      queue.splice(idx, 1);
+      if (m.queue.status === 'queued') return m;
+      changed = true;
+      return { ...m, queue: { ...m.queue, status: 'queued' as const } };
+    }
+    if (m.queue.status === 'queued') {
+      changed = true;
+      return withoutQueue(m);
+    }
+    return m;
+  });
+  return changed ? { messages } : {};
 }
 
 function applyEvent(state: AgentStoreState, event: AgentEvent): Partial<AgentStoreState> {
@@ -60,6 +172,8 @@ function applyEvent(state: AgentStoreState, event: AgentEvent): Partial<AgentSto
       return { runState: 'idle' };
     case 'state_changed':
       return { state: event.state, runState: event.state.runState };
+    case 'queue_update':
+      return applyQueueUpdate(state, event.steering, event.followUp);
     case 'message_start': {
       // Avoid double-inserting if the renderer also pushed the user message.
       const exists = state.messages.some((m) => m.id === event.message.id);
@@ -67,46 +181,31 @@ function applyEvent(state: AgentStoreState, event: AgentEvent): Partial<AgentSto
       return {
         messages: [
           ...state.messages,
-          { ...event.message, toolCalls: [...event.message.toolCalls] },
+          { ...event.message, parts: cloneParts(event.message.parts) },
         ],
       };
     }
-    case 'text_delta': {
-      const idx = state.messages.findIndex((m) => m.id === event.messageId);
-      if (idx < 0) return {};
-      const next = state.messages.slice();
-      const existing = next[idx];
-      if (!existing) return {};
-      next[idx] = { ...existing, text: existing.text + event.delta };
-      return { messages: next };
-    }
+    case 'text_delta':
+      return withMessage(state, event.messageId, (m) => appendDelta(m, 'text', event.delta));
+    case 'thinking_delta':
+      return withMessage(state, event.messageId, (m) => appendDelta(m, 'thinking', event.delta));
     case 'message_end':
       return {};
-    case 'tool_execution_start': {
-      const idx = state.messages.findIndex((m) => m.id === event.messageId);
-      if (idx < 0) return {};
-      const next = state.messages.slice();
-      const msg = next[idx];
-      if (!msg) return {};
-      next[idx] = { ...msg, toolCalls: [...msg.toolCalls, { ...event.tool }] };
-      return { messages: next };
-    }
+    case 'tool_execution_start':
+      return withMessage(state, event.messageId, (m) => ({
+        ...m,
+        parts: [...m.parts, { kind: 'tool', tool: { ...event.tool } }],
+      }));
     case 'tool_execution_update':
-    case 'tool_execution_end': {
-      const idx = state.messages.findIndex((m) => m.id === event.messageId);
-      if (idx < 0) return {};
-      const next = state.messages.slice();
-      const msg = next[idx];
-      if (!msg) return {};
-      const toolIdx = msg.toolCalls.findIndex((t) => t.toolCallId === event.toolCallId);
-      if (toolIdx < 0) return {};
-      const tools = msg.toolCalls.slice();
-      const tool = tools[toolIdx];
-      if (!tool) return {};
-      tools[toolIdx] = { ...tool, ...event.patch } as ToolCallSummary;
-      next[idx] = { ...msg, toolCalls: tools };
-      return { messages: next };
-    }
+    case 'tool_execution_end':
+      return withMessage(state, event.messageId, (m) => ({
+        ...m,
+        parts: m.parts.map((p) =>
+          p.kind === 'tool' && p.tool.toolCallId === event.toolCallId
+            ? { kind: 'tool', tool: { ...p.tool, ...event.patch } as ToolCallSummary }
+            : p,
+        ),
+      }));
     case 'error':
       return { lastError: event.message };
     default:
@@ -120,6 +219,7 @@ export const useAgentStore = create<AgentStoreState>((set, get) => ({
   messages: [],
   lastError: null,
   subscribed: false,
+  models: [],
 
   ensureSubscribed() {
     if (get().subscribed) return;
@@ -127,30 +227,96 @@ export const useAgentStore = create<AgentStoreState>((set, get) => ({
     window.pi.subscribe((event) => {
       set((s) => applyEvent(s, event));
     });
-    // Pull initial state and history once.
-    void window.pi.getState().then((state) => set({ state, runState: state.runState }));
-    void window.pi.getMessages().then((messages) => {
-      if (messages.length > 0) set({ messages });
-    });
+    // No active chat at startup — getState() rejects until one is opened.
+    // loadActiveChat() pulls state + transcript once a chat is selected.
+    void window.pi.getState().then(
+      (state) => set({ state, runState: state.runState }),
+      () => {},
+    );
   },
 
-  async sendPrompt(text: string) {
+  async loadActiveChat() {
+    try {
+      const [state, messages, models] = await Promise.all([
+        window.pi.getState(),
+        window.pi.getMessages(),
+        window.pi.getAvailableModels(),
+      ]);
+      set({ state, runState: state.runState, messages, models, lastError: null });
+    } catch (err) {
+      set({ messages: [], lastError: err instanceof Error ? err.message : String(err) });
+    }
+  },
+
+  async loadModels() {
+    try {
+      const models = await window.pi.getAvailableModels();
+      set({ models });
+    } catch {
+      // No active backend yet — models load on chat open.
+    }
+  },
+
+  async setModel(provider: string, modelId: string) {
+    try {
+      await window.pi.setModel(provider, modelId);
+      const state = await window.pi.getState();
+      set({ state, runState: state.runState });
+    } catch (err) {
+      set({ lastError: err instanceof Error ? err.message : String(err) });
+    }
+  },
+
+  async setThinkingLevel(level: ThinkingLevel) {
+    try {
+      await window.pi.setThinkingLevel(level);
+      const state = await window.pi.getState();
+      set({ state, runState: state.runState });
+    } catch (err) {
+      set({ lastError: err instanceof Error ? err.message : String(err) });
+    }
+  },
+
+  async sendPrompt(text: string, images: AgentImageContent[] = [], streamingBehavior?: PromptOptions['streamingBehavior']) {
     const trimmed = text.trim();
-    if (trimmed.length === 0) return;
+    if (trimmed.length === 0 && images.length === 0) return;
     // Optimistically append the user message; the backend will broadcast its
-    // own message_start, which we suppress as a duplicate by id.
-    const userMessage: AgentMessage = {
+    // own message_start, which we suppress as a duplicate by id. During a run,
+    // keep queued steering/follow-up messages visually pending until pi's
+    // queue_update confirms delivery.
+    const parts: MessagePart[] = [];
+    if (trimmed.length > 0) parts.push({ kind: 'text', text: trimmed });
+    for (const image of images) parts.push({ kind: 'image', image: { ...image } });
+    const queueKind = streamingBehavior === 'steer' || streamingBehavior === 'followUp' ? streamingBehavior : null;
+    const userMessage: DisplayMessage = {
       id: `u-${Date.now()}`,
       role: 'user',
       time: nowHHMM(),
-      text: trimmed,
-      toolCalls: [],
+      parts,
+      ...(queueKind
+        ? { queue: { kind: queueKind, status: 'pending' as const, text: trimmed, createdAt: Date.now() } }
+        : {}),
     };
     set((s) => ({ messages: [...s.messages, userMessage] }));
     try {
-      await window.pi.prompt(trimmed);
+      const options: PromptOptions = {};
+      if (images.length > 0) options.images = images;
+      if (streamingBehavior) options.streamingBehavior = streamingBehavior;
+      await window.pi.prompt(trimmed, options);
+      if (queueKind) {
+        set((s) => ({
+          messages: s.messages.map((m) =>
+            m.id === userMessage.id && m.queue?.status === 'pending'
+              ? { ...m, queue: { ...m.queue, status: 'queued' as const } }
+              : m,
+          ),
+        }));
+      }
     } catch (err) {
-      set({ lastError: err instanceof Error ? err.message : String(err) });
+      set((s) => ({
+        messages: s.messages.filter((m) => m.id !== userMessage.id),
+        lastError: err instanceof Error ? err.message : String(err),
+      }));
     }
   },
 
@@ -164,5 +330,9 @@ export const useAgentStore = create<AgentStoreState>((set, get) => ({
 
   clearError() {
     set({ lastError: null });
+  },
+
+  discardQueuedMessage(messageId: string) {
+    set((s) => ({ messages: s.messages.filter((m) => m.id !== messageId) }));
   },
 }));

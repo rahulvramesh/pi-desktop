@@ -7,7 +7,6 @@ import {
   Edit3,
   Info,
   Moon,
-  Plus,
   Puzzle,
   Settings as SettingsIcon,
   Sun,
@@ -20,14 +19,13 @@ import styles from './Settings.module.css';
  * Settings screen — distilled from the design bundle's Screens.jsx.
  *
  * Wiring policy for P3:
- *  - Theme and Density write through to electron-store via useUiStore.patch,
+ *  - Theme, Density, and Dev mode write through to electron-store via useUiStore.patch,
  *    so changes here are persisted across reloads and mirror the tweaks panel.
- *  - Every other control renders verbatim from the design but is local-state
- *    only. The agent-configuration knobs (AGENTS.md cascade, SYSTEM.md,
- *    compaction, permissions, providers list, models.json path) need backend
- *    plumbing that lives outside P1–P3 — those keep their design-faithful
- *    look here so the screen is reviewable, but flipping a toggle does not
- *    yet reach into ~/.pi/.
+ *  - Every other control is local-state only. The agent-configuration knobs
+ *    (AGENTS.md cascade, SYSTEM.md, compaction, permissions, models.json path)
+ *    need backend plumbing that lives outside P1–P3 — those keep their
+ *    design-faithful look here so the screen is reviewable, but flipping a
+ *    toggle does not yet reach into ~/.pi/.
  */
 
 interface Row {
@@ -92,6 +90,8 @@ export function Settings() {
   const setView = useUiStore((s) => s.setView);
   const theme = useUiStore((s) => s.theme);
   const density = useUiStore((s) => s.density);
+  const devMode = useUiStore((s) => s.devMode);
+  const rightPane = useUiStore((s) => s.rightPane);
   const patch = useUiStore((s) => s.patch);
 
   // Local UI state for the bits not yet plumbed to a backend.
@@ -117,33 +117,15 @@ export function Settings() {
     </Chip>
   );
 
+  const toggleDevMode = () => {
+    const next = !devMode;
+    const nextPatch: Partial<PrefsShape> = { devMode: next };
+    if (next) nextPatch.rightPane = 'rpc';
+    else if (rightPane === 'rpc') nextPatch.rightPane = 'files';
+    void patch(nextPatch);
+  };
+
   const sections: Section[] = [
-    {
-      title: 'Account',
-      rows: [
-        {
-          lbl: 'Signed in',
-          help: 'Earendil account',
-          ctrl: (
-            <>
-              <div className={styles.avatar}>MA</div>
-              <span style={{ fontSize: 13 }}>M. Adler · m@earendil.com</span>
-              <button className={`${styles.btn} ${styles.btnSm} ${styles.btnGhost}`}>Sign out</button>
-            </>
-          ),
-        },
-        {
-          lbl: 'Plan',
-          help: 'Pro · resets May 28',
-          ctrl: (
-            <>
-              <span className={`${styles.pill} ${styles.pillAccent}`}>Pro</span>
-              <button className={`${styles.btn} ${styles.btnSm}`}>Manage</button>
-            </>
-          ),
-        },
-      ],
-    },
     {
       title: 'Providers & models',
       rows: [
@@ -155,24 +137,6 @@ export function Settings() {
               <Cpu size={12} />
               <span className={`${styles.mono} ${styles.small}`}>claude-sonnet-4-6</span>
               <ChevronDown size={11} />
-            </div>
-          ),
-        },
-        {
-          lbl: 'Authenticated',
-          help: 'API keys live in ~/.pi/auth/ — none are written by this app',
-          ctrl: (
-            <div className={styles.chips}>
-              {['anthropic', 'openai', 'google', 'moonshot', 'deepseek', 'ollama'].map((p) => (
-                <Chip key={p} on>
-                  {p}
-                </Chip>
-              ))}
-              <Chip>azure</Chip>
-              <Chip>bedrock</Chip>
-              <button className={`${styles.btn} ${styles.btnSm} ${styles.btnGhost}`}>
-                <Plus size={11} /> add
-              </button>
             </div>
           ),
         },
@@ -316,6 +280,23 @@ export function Settings() {
       ],
     },
     {
+      title: 'Developer',
+      rows: [
+        {
+          lbl: 'Dev mode',
+          help: 'Show the live JSONL RPC trace inspector',
+          ctrl: (
+            <>
+              <Toggle on={devMode} onChange={toggleDevMode} ariaLabel="Dev mode" />
+              <span className={styles.small}>
+                {devMode ? 'RPC tab enabled · sk-* keys redacted' : 'Off'}
+              </span>
+            </>
+          ),
+        },
+      ],
+    },
+    {
       title: 'Keyboard',
       rows: [
         { lbl: 'Send', help: 'Submit the composer', ctrl: <Kbd>⏎</Kbd> },
@@ -359,8 +340,8 @@ export function Settings() {
         <h1 className={styles.h1}>Settings</h1>
         <p className={styles.lede}>
           Everything Pi can do is also a file in <span className={styles.monoInline}>~/.pi/</span>.
-          Edit by hand or right here. P1–P3 wires <em>Theme</em> and <em>Density</em>; the rest are
-          presentational scaffolding for the next phases.
+          Edit by hand or right here. P1–P3 wires <em>Theme</em>, <em>Density</em>, and
+          <em> Dev mode</em>; the rest are presentational scaffolding for the next phases.
         </p>
 
         {sections.map((s) => (

@@ -1,13 +1,11 @@
 .card {
-  margin-top: 8px;
+  /* Outer spacing is owned by the parent message's .parts gap so text /
+     thinking / tool parts share one uniform rhythm regardless of order. */
   border: 1px solid var(--border);
   border-radius: 9px;
   background: var(--surface-2);
   overflow: hidden;
   box-shadow: var(--shadow-sm);
-}
-.card + .card {
-  margin-top: 6px;
 }
 
 .head {
@@ -110,8 +108,25 @@
 }
 .pre {
   margin: 0;
-  padding: 10px 14px;
+  padding: 10px 0;
   line-height: 1.55;
   color: var(--ink-2);
   white-space: pre;
+}
+.diffAdd,
+.diffDel,
+.diffCtx {
+  display: block;
+  padding: 0 14px;
+}
+.diffAdd {
+  background: var(--add-bg);
+  color: var(--add);
+}
+.diffDel {
+  background: var(--del-bg);
+  color: var(--del);
+}
+.diffCtx {
+  color: var(--ink-2);
 }

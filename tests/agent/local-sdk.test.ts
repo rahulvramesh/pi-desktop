@@ -60,6 +60,8 @@ describe('LocalSdkBackend', () => {
   beforeEach(() => {
     sessionMocks.subscribers.length = 0;
     sessionMocks.prompt.mockClear();
+    sessionMocks.steer.mockClear();
+    sessionMocks.followUp.mockClear();
     sessionMocks.abort.mockClear();
     sessionMocks.dispose.mockClear();
     originalKey = process.env['ANTHROPIC_API_KEY'];
@@ -129,6 +131,24 @@ describe('LocalSdkBackend', () => {
     );
     expect(startEv?.tool.name).toBe('read');
     expect(startEv?.tool.arg).toBe('src/foo.ts');
+
+    await backend.dispose();
+  });
+
+  it('passes image attachments through to SDK prompt, steer, and followUp', async () => {
+    const { LocalSdkBackend } = await import('../../src/agent/local-sdk.js');
+    const backend = new LocalSdkBackend({ cwd: '/tmp/pi-test' });
+    const image = { type: 'image' as const, data: 'abc123', mimeType: 'image/png', name: 'shot.png' };
+    const sdkImage = { type: 'image', data: 'abc123', mimeType: 'image/png' };
+
+    await backend.prompt('look', { images: [image] });
+    expect(sessionMocks.prompt).toHaveBeenCalledWith('look', { images: [sdkImage] });
+
+    await backend.steer('steer', [image]);
+    expect(sessionMocks.steer).toHaveBeenCalledWith('steer', [sdkImage]);
+
+    await backend.followUp('follow', [image]);
+    expect(sessionMocks.followUp).toHaveBeenCalledWith('follow', [sdkImage]);
 
     await backend.dispose();
   });

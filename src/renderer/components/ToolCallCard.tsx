@@ -11,7 +11,26 @@ import {
   Wrench,
 } from 'lucide-react';
 import type { ToolCallSummary } from '../../agent/backend.js';
+import { CodeBlock } from './CodeBlock.js';
 import styles from './ToolCallCard.module.css';
+
+/** Render a unified-diff-shaped preview with +/− line coloring. */
+function renderDiff(preview: string) {
+  return preview.split('\n').map((line, idx) => {
+    const cls =
+      line.startsWith('+') && !line.startsWith('+++')
+        ? styles.diffAdd
+        : line.startsWith('-') && !line.startsWith('---')
+          ? styles.diffDel
+          : styles.diffCtx;
+    return (
+      <span key={idx} className={cls}>
+        {line || ' '}
+        {'\n'}
+      </span>
+    );
+  });
+}
 
 const TOOL_ICON: Record<string, typeof Wrench> = {
   read: Book,
@@ -73,7 +92,11 @@ export function ToolCallCard({ tool, defaultOpen = false }: Props) {
       </div>
       {open && tool.preview && (
         <div className={styles.body}>
-          <pre className={styles.pre}>{tool.preview}</pre>
+          {tool.name === 'edit' || tool.name === 'write' || tool.stats != null ? (
+            <pre className={styles.pre}>{renderDiff(tool.preview)}</pre>
+          ) : (
+            <CodeBlock code={tool.preview} arg={tool.arg} />
+          )}
         </div>
       )}
     </div>

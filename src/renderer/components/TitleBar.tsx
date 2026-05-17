@@ -1,5 +1,17 @@
-import { Command, History, PanelLeft, Settings, SlidersHorizontal, Sparkles } from 'lucide-react';
+import { useEffect, useState } from 'react';
+import {
+  Command,
+  Minus,
+  PanelLeft,
+  PanelRight,
+  Settings,
+  SlidersHorizontal,
+  Sparkles,
+  Square,
+  X,
+} from 'lucide-react';
 import { useAgentStore } from '../stores/agent.js';
+import { useProjectsStore } from '../stores/projects.js';
 import { useUiStore } from '../stores/ui.js';
 import { PiGlyph } from './PiGlyph.js';
 import { StatusPill } from './StatusPill.js';
@@ -22,14 +34,25 @@ export function TitleBar() {
   const toggleTweaks = useUiStore((s) => s.toggleTweaks);
   const view = useUiStore((s) => s.view);
   const setView = useUiStore((s) => s.setView);
+  const projectName = useProjectsStore((s) => s.activeProject()?.name ?? null);
+  const chatTitle = useProjectsStore((s) => s.activeChat()?.title ?? null);
+  const rightPane = useUiStore((s) => s.rightPane);
+  const patch = useUiStore((s) => s.patch);
+  const rightVisible = rightPane !== 'none';
+  const [isMaximized, setIsMaximized] = useState(false);
+
+  useEffect(() => {
+    return window.pi.window.onMaximizedChange(setIsMaximized);
+  }, []);
 
   return (
     <div className={styles.titlebar}>
       <div className={styles.left}>
-        {/* Custom traffic lights — wired to OS window controls since the
-            native frame is hidden. On macOS the system renders its own set
-            in this slot via titleBarStyle: 'hiddenInset'; we hide these via
-            [data-platform='darwin']. */}
+        {/* macOS-style decorative traffic lights, wired to OS window controls.
+            Shown only on macOS-likes (or Linux where there's no platform
+            convention) — Windows gets right-aligned controls below; macOS
+            itself hides these via [data-platform='darwin'] because the OS
+            draws real lights in this slot. */}
         <div className={styles.trafficLights} role="group" aria-label="Window controls">
           <button
             type="button"
@@ -67,8 +90,14 @@ export function TitleBar() {
         >
           <PanelLeft size={14} />
         </button>
-        <button className={styles.iconBtn} title="History (stubbed in P1–P3)" aria-label="History">
-          <History size={14} />
+        <button
+          className={`${styles.iconBtn} ${rightVisible ? styles.iconBtnActive : ''}`}
+          title={rightVisible ? 'Hide files panel' : 'Show files panel'}
+          aria-label="Toggle files panel"
+          aria-pressed={rightVisible}
+          onClick={() => void patch({ rightPane: rightVisible ? 'none' : 'files' })}
+        >
+          <PanelRight size={14} />
         </button>
       </div>
 
@@ -83,19 +112,27 @@ export function TitleBar() {
         >
           Pi
         </span>
-        <span className={styles.sep}>/</span>
-        <span
-          className={styles.crumb}
-          role="button"
-          tabIndex={0}
-          onClick={() => setView('chat')}
-        >
-          openclaw
-        </span>
-        <span className={styles.sep}>/</span>
-        <span className={styles.crumbActive}>
-          {view === 'settings' ? 'Settings' : 'Level loader v2'}
-        </span>
+        {projectName && (
+          <>
+            <span className={styles.sep}>/</span>
+            <span
+              className={styles.crumb}
+              role="button"
+              tabIndex={0}
+              onClick={() => setView('chat')}
+            >
+              {projectName}
+            </span>
+          </>
+        )}
+        {(view === 'settings' || chatTitle) && (
+          <>
+            <span className={styles.sep}>/</span>
+            <span className={styles.crumbActive}>
+              {view === 'settings' ? 'Settings' : chatTitle}
+            </span>
+          </>
+        )}
         <span className={styles.pillSlot}>
           <StatusPill state={runState} />
         </span>
@@ -133,6 +170,50 @@ export function TitleBar() {
         >
           <SlidersHorizontal size={14} />
         </button>
+
+        {/* Windows-style window controls. Hidden on macOS (OS draws them on
+            the left) and on Linux variants where the design's macOS-style
+            dots are used instead. */}
+        <div
+          className={styles.winControls}
+          role="group"
+          aria-label="Window controls"
+        >
+          <button
+            type="button"
+            className={styles.winBtn}
+            onClick={() => void window.pi.window.minimize()}
+            aria-label="Minimize window"
+            title="Minimize"
+          >
+            <Minus size={14} />
+          </button>
+          <button
+            type="button"
+            className={styles.winBtn}
+            onClick={() => void window.pi.window.maximizeToggle()}
+            aria-label={isMaximized ? 'Restore window' : 'Maximize window'}
+            title={isMaximized ? 'Restore' : 'Maximize'}
+          >
+            {isMaximized ? (
+              <svg width="11" height="11" viewBox="0 0 11 11" aria-hidden="true">
+                <rect x="2.5" y="0.5" width="8" height="8" fill="none" stroke="currentColor" />
+                <rect x="0.5" y="2.5" width="8" height="8" fill="var(--surface)" stroke="currentColor" />
+              </svg>
+            ) : (
+              <Square size={12} strokeWidth={1.5} />
+            )}
+          </button>
+          <button
+            type="button"
+            className={`${styles.winBtn} ${styles.winBtnClose}`}
+            onClick={() => void window.pi.window.close()}
+            aria-label="Close window"
+            title="Close"
+          >
+            <X size={14} />
+          </button>
+        </div>
       </div>
     </div>
   );

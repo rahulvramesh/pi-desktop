@@ -9,9 +9,12 @@
 
 import type {
   AgentEvent,
+  AgentImageContent,
   AgentMessage,
   AgentState,
+  ModelInfo,
   PromptOptions,
+  RpcLogEntry,
   ThinkingLevel,
 } from '../agent/backend.js';
 
@@ -24,13 +27,33 @@ export const IPC = {
   GetMessages: 'agent:getMessages',
   SetModel: 'agent:setModel',
   SetThinkingLevel: 'agent:setThinkingLevel',
+  Models: 'agent:models',
   NewSession: 'agent:newSession',
   SwitchSession: 'agent:switchSession',
   Fork: 'agent:fork',
   Event: 'agent:event',
 
+  RpcLogEvent: 'dev:rpc-log',
+  RpcLogsGet: 'dev:rpc-logs:get',
+  RpcLogsClear: 'dev:rpc-logs:clear',
+
   PrefsGet: 'prefs:get',
   PrefsSet: 'prefs:set',
+
+  ProjectsList: 'projects:list',
+  ProjectsPick: 'projects:pick',
+  ProjectsAdd: 'projects:add',
+  ProjectsRemove: 'projects:remove',
+
+  ChatsList: 'chats:list',
+  ChatsCreate: 'chats:create',
+  ChatsRename: 'chats:rename',
+  ChatsDelete: 'chats:delete',
+  ChatOpen: 'chat:open',
+
+  FsTree: 'fs:tree',
+  GitStatus: 'git:status',
+  ProjectIcon: 'project:icon',
 
   Meta: 'meta:get',
 
@@ -68,9 +91,13 @@ export interface PrefsShape {
   accent: string;
   density: 'compact' | 'regular' | 'comfy';
   sidebarVisible: boolean;
-  rightPane: 'diff' | 'term' | 'preview' | 'none';
+  rightPane: 'files' | 'diff' | 'term' | 'preview' | 'rpc' | 'none';
+  /** Enables developer-only affordances such as the RPC trace inspector. */
+  devMode: boolean;
   /** Persisted only as a developer-facing debug tweak. */
   agentStateOverride: 'idle' | 'thinking' | 'working' | 'auto';
+  /** Flipped true the first time the user leaves the Welcome screen. */
+  hasSeenWelcome: boolean;
 }
 
 export const PREFS_DEFAULTS: PrefsShape = {
@@ -78,9 +105,45 @@ export const PREFS_DEFAULTS: PrefsShape = {
   accent: '#c84a1f',
   density: 'regular',
   sidebarVisible: true,
-  rightPane: 'diff',
+  rightPane: 'files',
+  devMode: false,
   agentStateOverride: 'auto',
+  hasSeenWelcome: false,
 };
+
+/**
+ * A workspace folder the user added. `path` is an absolute filesystem path;
+ * the pi agent is spawned with this as its cwd so it operates on these files.
+ */
+export interface Project {
+  id: string;
+  name: string;
+  path: string;
+  createdAt: number;
+  lastOpenedAt: number | null;
+}
+
+/**
+ * A conversation within a project. `sessionFile` is the pi JSONL session file
+ * (owned by the agent, captured from get_state after the first prompt); null
+ * until the chat has run at least once. Reopening a chat resumes that file.
+ */
+export interface Chat {
+  id: string;
+  projectId: string;
+  title: string;
+  sessionFile: string | null;
+  createdAt: number;
+  updatedAt: number;
+}
+
+/** A node in the on-disk project file tree (Files pane). */
+export interface FsEntry {
+  type: 'file' | 'dir';
+  name: string;
+  path: string;
+  children?: FsEntry[];
+}
 
 /**
  * Verbs that cross from the renderer into the main process. Each ends up as
@@ -89,11 +152,12 @@ export const PREFS_DEFAULTS: PrefsShape = {
  */
 export interface PiApi {
   prompt(text: string, options?: PromptOptions): Promise<void>;
-  steer(text: string): Promise<void>;
-  followUp(text: string): Promise<void>;
+  steer(text: string, images?: AgentImageContent[]): Promise<void>;
+  followUp(text: string, images?: AgentImageContent[]): Promise<void>;
   abort(): Promise<void>;
   getState(): Promise<AgentState>;
   getMessages(): Promise<AgentMessage[]>;
+  getAvailableModels(): Promise<ModelInfo[]>;
   setModel(provider: string, modelId: string): Promise<void>;
   setThinkingLevel(level: ThinkingLevel): Promise<void>;
   newSession(): Promise<void>;
@@ -103,9 +167,52 @@ export interface PiApi {
   /** Subscribe to streamed AgentEvents. Returns an unsubscribe callback. */
   subscribe(listener: (event: AgentEvent) => void): () => void;
 
+  /** Developer-mode trace of JSONL RPC traffic from `pi --mode rpc`. */
+  rpcLogs: {
+    list(): Promise<RpcLogEntry[]>;
+    clear(): Promise<void>;
+    subscribe(listener: (entry: RpcLogEntry) => void): () => void;
+  };
+
   prefs: {
     get(): Promise<PrefsShape>;
     set(patch: Partial<PrefsShape>): Promise<PrefsShape>;
+  };
+
+  /** Project (workspace folder) management, persisted in SQLite. */
+  projects: {
+    list(): Promise<Project[]>;
+    /** Open the OS folder picker. Returns null if the user cancelled. */
+    pick(): Promise<{ path: string; name: string } | null>;
+    /** Register a folder as a project (idempotent on path). */
+    add(path: string, name?: string): Promise<Project>;
+    remove(id: string): Promise<void>;
+    /** A favicon-ish image for the project as a data URL, or null if none. */
+    icon(path: string): Promise<string | null>;
+  };
+
+  /** Chats (agent sessions) within a project, persisted in SQLite. */
+  chats: {
+    list(projectId: string): Promise<Chat[]>;
+    create(projectId: string, title?: string): Promise<Chat>;
+    rename(id: string, title: string): Promise<void>;
+    delete(id: string): Promise<void>;
+    /**
+     * Make this chat active: (re)spawns the pi RPC agent in the project's
+     * folder and resumes the chat's session file if it has one. Emits the
+     * usual agent events; the renderer should reload messages after.
+     */
+    open(id: string): Promise<Chat>;
+  };
+
+  /** Read the project's on-disk file tree for the Files pane. */
+  fs: {
+    tree(rootPath: string): Promise<FsEntry[]>;
+  };
+
+  /** Git working-tree summary for the active project's folder. */
+  git: {
+    status(cwd: string): Promise<{ branch: string | null; modified: number }>;
   };
 
   /** Diagnostic info surfaced in the renderer footer. */
@@ -138,4 +245,5 @@ declare global {
  */
 export type WireEvent =
   | AgentEvent
-  | { type: 'text_delta_batch'; messageId: string; delta: string };
+  | { type: 'text_delta_batch'; messageId: string; delta: string }
+  | { type: 'thinking_delta_batch'; messageId: string; delta: string };

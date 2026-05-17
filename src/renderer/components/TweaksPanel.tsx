@@ -1,6 +1,6 @@
 import { useEffect } from 'react';
 import * as Dialog from '@radix-ui/react-dialog';
-import { Settings2, X } from 'lucide-react';
+import { X } from 'lucide-react';
 import { useUiStore } from '../stores/ui.js';
 import { useAgentStore } from '../stores/agent.js';
 import type { PrefsShape } from '../../shared/ipc.js';
@@ -82,6 +82,7 @@ export function TweaksPanel() {
   const density = useUiStore((s) => s.density);
   const accent = useUiStore((s) => s.accent);
   const rightPane = useUiStore((s) => s.rightPane);
+  const devMode = useUiStore((s) => s.devMode);
   const agentStateOverride = useUiStore((s) => s.agentStateOverride);
   const sidebarVisible = useUiStore((s) => s.sidebarVisible);
   const patch = useUiStore((s) => s.patch);
@@ -111,18 +112,20 @@ export function TweaksPanel() {
     setRunState({ runState: next });
   };
 
+  const toggleDevMode = () => {
+    const next = !devMode;
+    const nextPatch: Partial<PrefsShape> = { devMode: next };
+    if (next) nextPatch.rightPane = 'rpc';
+    else if (rightPane === 'rpc') nextPatch.rightPane = 'files';
+    void patch(nextPatch);
+  };
+
+  const rightPaneOptions: readonly PrefsShape['rightPane'][] = devMode
+    ? ['none', 'files', 'diff', 'term', 'preview', 'rpc']
+    : ['none', 'files', 'diff', 'term', 'preview'];
+
   return (
     <>
-      {/* Persistent toggle button — bottom-right */}
-      <button
-        className={styles.fab}
-        onClick={() => setOpen(!open)}
-        aria-label="Tweaks (Alt+T)"
-        title="Tweaks (Alt+T)"
-      >
-        <Settings2 size={16} />
-      </button>
-
       <Dialog.Root open={open} onOpenChange={setOpen} modal={false}>
         <Dialog.Portal>
           <Dialog.Content
@@ -138,7 +141,7 @@ export function TweaksPanel() {
             <div className={styles.head}>
               <Dialog.Title className={styles.title}>Tweaks</Dialog.Title>
               <Dialog.Description className={styles.srOnly}>
-                Theme, density, and agent-state debug toggles.
+                Theme, density, dev mode, and agent-state debug toggles.
               </Dialog.Description>
               <Dialog.Close asChild>
                 <button className={styles.close} aria-label="Close">
@@ -174,12 +177,29 @@ export function TweaksPanel() {
                   <span />
                 </button>
               </div>
-              <Segmented
+              <Segmented<PrefsShape['rightPane']>
                 label="Right pane"
                 value={rightPane}
-                options={['none', 'diff', 'term', 'preview'] as const}
+                options={rightPaneOptions}
                 onChange={(v) => void patch({ rightPane: v })}
               />
+
+              <div className={styles.section}>Developer</div>
+              <div className={styles.row}>
+                <div className={styles.lbl}>Dev mode</div>
+                <button
+                  className={`${styles.toggle} ${devMode ? styles.toggleOn : ''}`}
+                  onClick={toggleDevMode}
+                  aria-pressed={devMode}
+                  type="button"
+                >
+                  <span />
+                </button>
+              </div>
+              <div className={styles.note}>
+                Shows a live <code>RPC</code> tab with JSONL requests, responses, events, and
+                stderr. API-key shaped strings are redacted.
+              </div>
 
               <div className={styles.section}>Agent state (debug)</div>
               <Segmented

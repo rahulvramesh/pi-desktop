@@ -1,0 +1,590 @@
+<!doctype html>
+<html lang="en" data-density="moderate">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>pi-desktop · Kanban boards — proposal</title>
+  <style>
+    :root {
+      --bg-app: oklch(98.4% 0.004 80);
+      --bg-canvas: oklch(99.2% 0.003 80);
+      --bg-surface: oklch(100% 0 0);
+      --bg-sunken: oklch(96.5% 0.005 80);
+      --bg-hover: oklch(95% 0.006 80);
+
+      --line: oklch(91% 0.005 80);
+      --line-soft: oklch(94% 0.004 80);
+      --line-strong: oklch(84% 0.007 80);
+
+      --fg-primary: oklch(22% 0.008 70);
+      --fg-secondary: oklch(42% 0.008 70);
+      --fg-tertiary: oklch(58% 0.007 70);
+      --fg-muted: oklch(70% 0.006 80);
+
+      --accent: oklch(60% 0.10 185);
+      --accent-soft: oklch(94% 0.03 185);
+      --accent-fg-on-soft: oklch(38% 0.09 185);
+      --accent-ring: oklch(75% 0.09 185 / 0.35);
+
+      --todo: oklch(70% 0.03 80);
+      --todo-soft: oklch(95% 0.01 80);
+      --doing: oklch(60% 0.10 185);
+      --doing-soft: oklch(94% 0.03 185);
+      --review: oklch(72% 0.14 85);
+      --review-soft: oklch(96% 0.04 85);
+      --done: oklch(62% 0.11 155);
+      --done-soft: oklch(95% 0.03 155);
+      --blocked: oklch(52% 0.18 25);
+      --blocked-soft: oklch(95% 0.03 25);
+
+      --radius-sm: 4px;
+      --radius: 6px;
+      --radius-md: 8px;
+
+      --shadow-xs: 0 1px 2px rgb(20 15 10 / 0.04);
+      --shadow-sm: 0 1px 2px rgb(20 15 10 / 0.04), 0 1px 3px rgb(20 15 10 / 0.06);
+
+      --font-sans: 'IBM Plex Sans', 'Inter', system-ui, -apple-system, 'Segoe UI', sans-serif;
+      --font-mono: 'IBM Plex Mono', ui-monospace, 'SF Mono', Menlo, Consolas, monospace;
+      --font-serif: 'IBM Plex Serif', Georgia, 'Times New Roman', serif;
+
+      --density-base: 14px;
+      --density-line: 1.5;
+      color-scheme: light;
+    }
+
+    * { box-sizing: border-box; }
+    html, body { margin: 0; padding: 0; }
+    body {
+      font-family: var(--font-sans);
+      font-size: var(--density-base);
+      line-height: var(--density-line);
+      color: var(--fg-primary);
+      background: var(--bg-app);
+      -webkit-font-smoothing: antialiased;
+      text-rendering: optimizeLegibility;
+    }
+    .mono { font-family: var(--font-mono); }
+    code {
+      font-family: var(--font-mono);
+      font-size: 0.86em;
+      padding: 1px 5px;
+      border: 1px solid var(--line);
+      border-radius: var(--radius-sm);
+      background: var(--bg-sunken);
+      color: var(--accent-fg-on-soft);
+    }
+    a { color: var(--accent-fg-on-soft); }
+    ::selection { background: var(--accent-ring); }
+
+    .page { max-width: 1180px; margin: 0 auto; padding: 32px 28px 80px; }
+
+    .masthead {
+      display: grid; grid-template-columns: 1fr auto; gap: 28px;
+      align-items: end; padding-bottom: 22px;
+      border-bottom: 1px solid var(--line); margin-bottom: 26px;
+    }
+    .crumb {
+      display: inline-flex; align-items: center; gap: 8px;
+      color: var(--fg-tertiary); font-size: 12px;
+      text-transform: uppercase; letter-spacing: 0.08em; font-weight: 500;
+    }
+    .crumb .sep { color: var(--fg-muted); }
+    h1.title {
+      font-family: var(--font-serif); font-weight: 500;
+      font-size: 38px; line-height: 1.14; letter-spacing: -0.018em;
+      margin: 12px 0 8px; color: var(--fg-primary);
+    }
+    .subtitle { color: var(--fg-secondary); font-size: 15px; max-width: 760px; }
+    .meta { display: flex; flex-direction: column; gap: 6px; align-items: flex-end;
+      font-size: 12px; color: var(--fg-tertiary); }
+    .status-tag {
+      display: inline-flex; align-items: center; gap: 6px;
+      padding: 3px 9px; border-radius: 999px; font-size: 12px; font-weight: 500;
+      background: var(--accent-soft); color: var(--accent-fg-on-soft);
+      border: 1px solid color-mix(in oklch, var(--accent) 30%, transparent);
+    }
+    .status-tag .dot { width: 6px; height: 6px; border-radius: 999px; background: var(--accent); }
+
+    table.metatable { width: 100%; border-collapse: separate; border-spacing: 0;
+      border: 1px solid var(--line); border-radius: var(--radius);
+      overflow: hidden; font-size: 13px; margin-bottom: 26px; }
+    table.metatable th { text-align: left; width: 168px; padding: 8px 14px;
+      background: var(--bg-sunken); color: var(--fg-tertiary); font-weight: 600;
+      font-size: 11px; text-transform: uppercase; letter-spacing: 0.05em;
+      border-bottom: 1px solid var(--line-soft); }
+    table.metatable td { padding: 8px 14px; color: var(--fg-secondary);
+      border-bottom: 1px solid var(--line-soft); }
+    table.metatable tr:last-child th, table.metatable tr:last-child td { border-bottom: 0; }
+
+    nav.quicknav {
+      position: sticky; top: 0; z-index: 20;
+      background: color-mix(in oklch, var(--bg-app) 90%, transparent);
+      backdrop-filter: blur(10px);
+      border: 1px solid var(--line); border-radius: var(--radius);
+      padding: 6px; margin-bottom: 24px; display: flex; flex-wrap: wrap; gap: 2px;
+    }
+    nav.quicknav a { text-decoration: none; color: var(--fg-secondary);
+      padding: 6px 10px; border-radius: var(--radius-sm); font-size: 13px; font-weight: 500; }
+    nav.quicknav a:hover { background: var(--bg-hover); color: var(--fg-primary); }
+
+    section { background: var(--bg-surface); border: 1px solid var(--line);
+      border-radius: var(--radius-md); margin-bottom: 18px; overflow: hidden;
+      box-shadow: var(--shadow-xs); }
+    .sec-head { display: flex; justify-content: space-between; align-items: baseline;
+      padding: 20px 24px 8px; border-bottom: 1px solid var(--line-soft); gap: 16px; }
+    .sec-head h2 { font-family: var(--font-serif); font-weight: 500; font-size: 22px;
+      letter-spacing: -0.012em; margin: 0; color: var(--fg-primary); }
+    .sec-head .sec-meta { font-family: var(--font-mono); font-size: 11px;
+      color: var(--fg-tertiary); letter-spacing: 0.04em; text-transform: uppercase; }
+    .sec-body { padding: 18px 24px 22px; }
+    .sec-body > p:first-child { margin-top: 0; }
+    .sec-body p { color: var(--fg-secondary); max-width: 80ch; margin: 8px 0 14px; }
+    .sec-body h4 { margin: 18px 0 8px; font-size: 13px; color: var(--fg-primary); }
+
+    .two-col { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+    .panel { border: 1px solid var(--line); border-radius: var(--radius);
+      background: var(--bg-canvas); padding: 14px 16px; }
+    .panel h4 { margin: 0 0 4px; font-weight: 600; font-size: 13px; color: var(--fg-primary); }
+    .panel small { display: block; font-size: 11.5px; color: var(--fg-tertiary); margin-bottom: 8px; }
+    .panel.accent { background: var(--accent-soft);
+      border-color: color-mix(in oklch, var(--accent) 30%, transparent); }
+    .panel.accent h4 { color: var(--accent-fg-on-soft); }
+
+    ul.flatlist, ol.flatlist { margin: 0; padding: 0; list-style: none; display: grid; gap: 6px; }
+    ul.flatlist li, ol.flatlist li { position: relative; padding: 7px 12px 7px 28px;
+      color: var(--fg-secondary); font-size: 13.5px; border-radius: var(--radius-sm);
+      background: var(--bg-canvas); border: 1px solid var(--line-soft); }
+    ul.flatlist li::before { content: ""; position: absolute; left: 12px; top: 14px;
+      width: 5px; height: 5px; border-radius: 999px; background: var(--accent); }
+    ul.flatlist.warn li::before { background: var(--review); }
+    ul.flatlist.danger li::before { background: var(--blocked); }
+    ul.flatlist.ok li::before { background: var(--done); }
+    ol.flatlist { counter-reset: idx; }
+    ol.flatlist li { padding-left: 38px; }
+    ol.flatlist li::before { counter-increment: idx; content: counter(idx);
+      position: absolute; left: 10px; top: 6px; width: 20px; height: 20px;
+      display: inline-flex; align-items: center; justify-content: center;
+      background: var(--accent-soft); color: var(--accent-fg-on-soft);
+      border-radius: var(--radius-sm); font-family: var(--font-mono);
+      font-size: 11px; font-weight: 600; }
+    li b { color: var(--fg-primary); font-weight: 600; }
+
+    table.wm { width: 100%; border-collapse: separate; border-spacing: 0;
+      border: 1px solid var(--line); border-radius: var(--radius);
+      overflow: hidden; font-size: 13px; }
+    table.wm th { text-align: left; padding: 9px 12px; background: var(--bg-sunken);
+      color: var(--fg-tertiary); font-weight: 600; font-size: 11px;
+      text-transform: uppercase; letter-spacing: 0.05em; border-bottom: 1px solid var(--line); }
+    table.wm td { padding: 10px 12px; border-top: 1px solid var(--line-soft);
+      color: var(--fg-secondary); vertical-align: top; }
+    table.wm tr:first-child td { border-top: 0; }
+    table.wm td.mono { font-family: var(--font-mono); color: var(--fg-primary); font-size: 12px; }
+
+    .chip { display: inline-flex; align-items: center; gap: 5px; padding: 1px 8px;
+      border-radius: 999px; font-size: 11px; font-weight: 600; letter-spacing: 0.02em;
+      border: 1px solid var(--line); }
+    .chip .d { width: 6px; height: 6px; border-radius: 999px; }
+    .chip.todo { background: var(--todo-soft); color: oklch(45% 0.02 80); } .chip.todo .d { background: var(--todo); }
+    .chip.doing { background: var(--doing-soft); color: var(--accent-fg-on-soft); } .chip.doing .d { background: var(--doing); }
+    .chip.review { background: var(--review-soft); color: oklch(45% 0.10 85); } .chip.review .d { background: var(--review); }
+    .chip.done { background: var(--done-soft); color: oklch(40% 0.09 155); } .chip.done .d { background: var(--done); }
+    .chip.blocked { background: var(--blocked-soft); color: oklch(45% 0.14 25); } .chip.blocked .d { background: var(--blocked); }
+
+    .diagram { border: 1px solid var(--line); border-radius: var(--radius);
+      background: var(--bg-canvas); padding: 16px; overflow-x: auto; }
+    .diagram svg { display: block; max-width: 100%; height: auto; }
+    .diagram-cap { margin-top: 8px; font-size: 11.5px; color: var(--fg-tertiary); }
+
+    .stepper { display: grid; grid-template-columns: 28px 1fr; gap: 0 14px; }
+    .stepper .step-n { grid-column: 1; width: 24px; height: 24px;
+      display: inline-flex; align-items: center; justify-content: center;
+      background: var(--bg-surface); border: 1px solid var(--line-strong);
+      border-radius: 999px; font-family: var(--font-mono); font-size: 11px;
+      font-weight: 600; color: var(--fg-secondary); }
+    .stepper .step-line { grid-column: 1; width: 1px; margin: 4px auto;
+      background: var(--line); min-height: 14px; }
+    .stepper .step-body { grid-column: 2; padding: 1px 0 16px; }
+    .stepper .step-body .h { font-weight: 600; color: var(--fg-primary);
+      margin-bottom: 2px; font-size: 13.5px; }
+    .stepper .step-body .d { color: var(--fg-secondary); font-size: 13px; }
+    .stepper .step-body .d code { font-size: 12px; }
+
+    .qbox { border: 1px solid color-mix(in oklch, var(--review) 35%, transparent);
+      background: var(--review-soft); border-radius: var(--radius);
+      padding: 12px 14px; margin-bottom: 8px; }
+    .qbox .q { font-weight: 600; color: oklch(38% 0.10 85); font-size: 13.5px; }
+    .qbox .a { color: var(--fg-secondary); font-size: 13px; margin-top: 3px; }
+
+    .footer { margin-top: 24px; padding-top: 16px; border-top: 1px solid var(--line);
+      display: flex; justify-content: space-between; flex-wrap: wrap; gap: 10px;
+      font-size: 12px; color: var(--fg-tertiary); }
+
+    @media (max-width: 960px) {
+      .two-col { grid-template-columns: 1fr; }
+      table.wm { display: block; overflow-x: auto; }
+      .masthead { grid-template-columns: 1fr; }
+      .meta { align-items: flex-start; }
+    }
+    @media print {
+      nav.quicknav { position: static; }
+      section { break-inside: avoid; box-shadow: none; }
+      body { background: #fff; }
+    }
+  </style>
+</head>
+<body>
+  <div class="page">
+
+    <header class="masthead">
+      <div>
+        <div class="crumb">
+          <span>pi-desktop</span>
+          <span class="sep">/</span>
+          <span>Kanban boards</span>
+        </div>
+        <h1 class="title">Kanban boards for projects &amp; chats</h1>
+        <p class="subtitle">
+          Give every project a board where its chats are cards with a status, and roll all
+          projects up into one cross-project board. A second lens on the data we already
+          have in SQLite &mdash; not a new entity. This is a proposal: thinking, the impact
+          surface, a build order, and the decisions that need an answer before code.
+        </p>
+      </div>
+      <div class="meta">
+        <span class="status-tag"><span class="dot"></span>Proposed &middot; designed, not implemented</span>
+        <span>Idea raised 2026-05-17</span>
+        <span>Companion to the live <code>projects</code>/<code>chats</code> model</span>
+      </div>
+    </header>
+
+    <table class="metatable">
+      <tr><th>Classification</th><td>Internal</td></tr>
+      <tr><th>Owner</th><td>pi-desktop maintainer (rahul.vr)</td></tr>
+      <tr><th>Audience</th><td>Engineering handoff &mdash; whoever implements this in the renderer + main process</td></tr>
+      <tr><th>Status</th><td>Proposed. Specified here; pending a go-ahead and the open-question answers below.</td></tr>
+      <tr><th>Last updated</th><td>2026-05-17</td></tr>
+      <tr><th>Touches</th><td><code>src/main/db.ts</code> &middot; <code>src/main/projects-bridge.ts</code> &middot; <code>src/shared/ipc.ts</code> &middot; <code>src/preload/index.ts</code> &middot; <code>src/renderer/stores/projects.ts</code> &middot; new Kanban view + sidebar entry</td></tr>
+    </table>
+
+    <nav class="quicknav" aria-label="Sections">
+      <a href="#idea">The idea</a>
+      <a href="#concept">Concept</a>
+      <a href="#cards">Cards &amp; columns</a>
+      <a href="#data">Data &amp; migration</a>
+      <a href="#auto">Auto-transitions</a>
+      <a href="#surface">Code surface</a>
+      <a href="#global">Global board</a>
+      <a href="#build">Build order</a>
+      <a href="#risks">Risks</a>
+      <a href="#questions">Open questions</a>
+    </nav>
+
+    <section id="idea">
+      <div class="sec-head"><h2>The idea, and why it fits</h2><span class="sec-meta">motivation</span></div>
+      <div class="sec-body">
+        <p>
+          The app already models <b>projects</b> (folders the user added) that contain
+          <b>chats</b> (pi agent sessions). Today chats are only ever shown as a recency-sorted
+          list in the sidebar. But a chat <em>is</em> a unit of work &mdash; &ldquo;understand the
+          project&rdquo;, &ldquo;add a dev mode&rdquo;, &ldquo;fix the loader&rdquo;. A Kanban view
+          re-groups the same chats by <b>status</b> instead of by time, so the sidebar answers
+          &ldquo;what did I do recently&rdquo; and the board answers &ldquo;what&rsquo;s in flight,
+          what&rsquo;s blocked, what&rsquo;s done&rdquo;.
+        </p>
+        <div class="two-col">
+          <div class="panel accent">
+            <h4>Why it's cheap</h4>
+            <small>Leverages what exists</small>
+            <ul class="flatlist" style="margin-top:10px">
+              <li>Cards = existing chats. <b>No new entity</b>, no new persistence story.</li>
+              <li>One new nullable column on <code>chats</code>; everything else is read paths.</li>
+              <li>SQLite + typed IPC + zustand store are already the spine &mdash; we extend, not invent.</li>
+              <li>Run-state already streams, so &ldquo;In&nbsp;progress&rdquo; can be automatic.</li>
+            </ul>
+          </div>
+          <div class="panel">
+            <h4>Why it's worth it</h4>
+            <small>What the user gets</small>
+            <ul class="flatlist ok" style="margin-top:10px">
+              <li>A real sense of <em>state</em> across many parallel coding tasks.</li>
+              <li>Cross-project visibility: one board for everything you&rsquo;re running.</li>
+              <li>&ldquo;Blocked&rdquo; / &ldquo;Review&rdquo; columns make hand-offs and waiting explicit.</li>
+              <li>Natural home for future per-card metadata (model, tokens, last activity).</li>
+            </ul>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section id="concept">
+      <div class="sec-head"><h2>Concept &mdash; two boards, one model</h2><span class="sec-meta">UX shape</span></div>
+      <div class="sec-body">
+        <p>
+          A <b>per-project board</b> opened from a project (its chats only), and a <b>global
+          board</b> reachable from a top-level sidebar entry that aggregates every project&rsquo;s
+          chats with a project chip on each card. Same columns, same card, different scope and a
+          project filter on the global one.
+        </p>
+        <div class="diagram" role="img" aria-label="Kanban board layout: status columns with chat cards; the global board adds project swimlanes">
+          <svg viewBox="0 0 1080 360" class="diag" xmlns="http://www.w3.org/2000/svg" font-family="var(--font-sans)">
+            <defs>
+              <style>
+                .col{fill:oklch(96.5% 0.005 80);stroke:oklch(91% 0.005 80)}
+                .hd{font:600 12px var(--font-sans);fill:oklch(42% 0.008 70)}
+                .cnt{font:600 11px var(--font-mono);fill:oklch(58% 0.007 70)}
+                .card{fill:#fff;stroke:oklch(91% 0.005 80)}
+                .ct{font:500 11px var(--font-sans);fill:oklch(22% 0.008 70)}
+                .cm{font:400 9.5px var(--font-mono);fill:oklch(58% 0.007 70)}
+                .lane{font:600 10px var(--font-sans);fill:oklch(58% 0.007 70);letter-spacing:.06em}
+              </style>
+            </defs>
+            <rect x="0" y="0" width="1080" height="360" fill="none"/>
+            <!-- 5 columns -->
+            <g>
+              <rect class="col" x="8"   y="8" width="200" height="344" rx="6"/>
+              <rect class="col" x="216" y="8" width="200" height="344" rx="6"/>
+              <rect class="col" x="424" y="8" width="200" height="344" rx="6"/>
+              <rect class="col" x="632" y="8" width="200" height="344" rx="6"/>
+              <rect class="col" x="840" y="8" width="232" height="344" rx="6"/>
+            </g>
+            <g>
+              <circle cx="24" cy="30" r="4" fill="oklch(70% 0.03 80)"/><text class="hd" x="36" y="34">Todo</text><text class="cnt" x="190" y="34" text-anchor="end">3</text>
+              <circle cx="232" cy="30" r="4" fill="oklch(60% 0.10 185)"/><text class="hd" x="244" y="34">In progress</text><text class="cnt" x="398" y="34" text-anchor="end">1</text>
+              <circle cx="440" cy="30" r="4" fill="oklch(72% 0.14 85)"/><text class="hd" x="452" y="34">Review</text><text class="cnt" x="606" y="34" text-anchor="end">1</text>
+              <circle cx="648" cy="30" r="4" fill="oklch(62% 0.11 155)"/><text class="hd" x="660" y="34">Done</text><text class="cnt" x="814" y="34" text-anchor="end">2</text>
+              <circle cx="856" cy="30" r="4" fill="oklch(52% 0.18 25)"/><text class="hd" x="868" y="34">Blocked</text><text class="cnt" x="1054" y="34" text-anchor="end">0</text>
+            </g>
+            <!-- swimlane separators (global board) -->
+            <line x1="8" y1="180" x2="1072" y2="180" stroke="oklch(84% 0.007 80)" stroke-dasharray="3 4"/>
+            <text class="lane" x="14" y="58">PROJECT&nbsp;A</text>
+            <text class="lane" x="14" y="206">PROJECT&nbsp;B</text>
+            <!-- cards -->
+            <g>
+              <rect class="card" x="20"  y="66"  width="176" height="44" rx="5"/><text class="ct" x="30" y="86">understand the project</text><text class="cm" x="30" y="100">4d &middot; sonnet-4.6</text>
+              <rect class="card" x="20"  y="118" width="176" height="44" rx="5"/><text class="ct" x="30" y="138">add image paste</text><text class="cm" x="30" y="152">2d</text>
+              <rect class="card" x="228" y="66"  width="176" height="44" rx="5"/><text class="ct" x="238" y="86">kanban proposal</text><text class="cm" x="238" y="100">now &middot; running</text>
+              <rect class="card" x="436" y="66"  width="176" height="44" rx="5"/><text class="ct" x="446" y="86">soft-cells loader</text><text class="cm" x="446" y="100">awaiting review</text>
+              <rect class="card" x="644" y="66"  width="176" height="44" rx="5"/><text class="ct" x="654" y="86">parts ordering fix</text><text class="cm" x="654" y="100">shipped</text>
+              <rect class="card" x="20"  y="214" width="176" height="44" rx="5"/><text class="ct" x="30" y="234">hi</text><text class="cm" x="30" y="248">1w</text>
+              <rect class="card" x="644" y="214" width="176" height="44" rx="5"/><text class="ct" x="654" y="234">repo onboarding</text><text class="cm" x="654" y="248">shipped</text>
+            </g>
+          </svg>
+          <div class="diagram-cap">
+            Status columns are fixed; cards are chats. The per-project board drops the swimlanes
+            and shows one project; the global board keeps them (or filters to one project).
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section id="cards">
+      <div class="sec-head"><h2>What a card is, and the columns</h2><span class="sec-meta">taxonomy</span></div>
+      <div class="sec-body">
+        <p>
+          A card is a <b>chat</b> (no separate &ldquo;task&rdquo; entity &mdash; that would split the
+          model and double the bookkeeping). Every chat carries a status; new chats default to
+          <span class="chip todo"><span class="d"></span>Todo</span>. The recommended column set is
+          deliberately small &mdash; five is already at the edge of useful for a single user:
+        </p>
+        <p style="display:flex;gap:8px;flex-wrap:wrap;margin:0 0 14px">
+          <span class="chip todo"><span class="d"></span>Todo</span>
+          <span class="chip doing"><span class="d"></span>In&nbsp;progress</span>
+          <span class="chip review"><span class="d"></span>Review</span>
+          <span class="chip done"><span class="d"></span>Done</span>
+          <span class="chip blocked"><span class="d"></span>Blocked</span>
+        </p>
+        <table class="wm">
+          <tr><th>Column</th><th>Means</th><th>Enters by</th></tr>
+          <tr><td><span class="chip todo"><span class="d"></span>Todo</span></td><td>Created, not started.</td><td class="mono">default on create</td></tr>
+          <tr><td><span class="chip doing"><span class="d"></span>In progress</span></td><td>Actively being worked / agent running.</td><td class="mono">auto on first run · or drag</td></tr>
+          <tr><td><span class="chip review"><span class="d"></span>Review</span></td><td>Agent done; user is verifying the change.</td><td class="mono">drag (manual)</td></tr>
+          <tr><td><span class="chip done"><span class="d"></span>Done</span></td><td>Accepted / shipped.</td><td class="mono">drag (manual)</td></tr>
+          <tr><td><span class="chip blocked"><span class="d"></span>Blocked</span></td><td>Waiting on input/decision/dependency.</td><td class="mono">drag (manual)</td></tr>
+        </table>
+        <p style="margin-top:14px">
+          <b>Recommendation:</b> ship <code>todo · doing · done</code> first (covers 90% of value),
+          treat <code>review</code> and <code>blocked</code> as enabled-by-default but easy to
+          collapse. An <code>archived</code> state is better as a boolean filter than a sixth
+          column. Status is an <code>enum</code> string, stored lowercase.
+        </p>
+      </div>
+    </section>
+
+    <section id="data">
+      <div class="sec-head"><h2>Data model &amp; the SQLite migration</h2><span class="sec-meta">main · db.ts</span></div>
+      <div class="sec-body">
+        <p>
+          One additive change to the <code>chats</code> table. The catch: <code>db.ts</code> creates
+          schema with <code>CREATE TABLE IF NOT EXISTS</code> and has <b>no migration framework</b>,
+          so an existing user&rsquo;s DB won&rsquo;t get the new column from the create statement
+          alone. We need a tiny idempotent migration on open.
+        </p>
+        <div class="two-col">
+          <div class="panel">
+            <h4>Schema delta</h4>
+            <small><code>chats</code> &mdash; one column</small>
+            <ul class="flatlist" style="margin-top:10px">
+              <li><code>status TEXT NOT NULL DEFAULT 'todo'</code></li>
+              <li>Optional later: <code>status_changed_at INTEGER</code> for &ldquo;age in column&rdquo;.</li>
+              <li>Index <code>(project_id, status)</code> for fast per-project board reads.</li>
+            </ul>
+          </div>
+          <div class="panel">
+            <h4>Migration shape</h4>
+            <small>idempotent, runs on DB open</small>
+            <ul class="flatlist warn" style="margin-top:10px">
+              <li>Read <code>PRAGMA table_info(chats)</code>; if <code>status</code> absent, <code>ALTER TABLE chats ADD COLUMN status TEXT NOT NULL DEFAULT 'todo'</code>.</li>
+              <li>Existing rows backfill to <code>todo</code> via the column default.</li>
+              <li>Wrap in a <code>user_version</code> bump so it&rsquo;s a known pattern for the next migration too.</li>
+            </ul>
+          </div>
+        </div>
+        <h4>Repository &amp; types</h4>
+        <ul class="flatlist">
+          <li><code>chatsRepo</code> gains <code>setStatus(id, status)</code> and includes <code>status</code> in the row mapper; <code>list()</code> already returns full rows so the board reads come free.</li>
+          <li><code>Chat</code> in <code>src/shared/ipc.ts</code> gains <code>status: ChatStatus</code> where <code>ChatStatus = 'todo' | 'doing' | 'review' | 'done' | 'blocked'</code>.</li>
+          <li>No change to <code>session_file</code>/transcript handling &mdash; status is orthogonal to agent state.</li>
+        </ul>
+      </div>
+    </section>
+
+    <section id="auto">
+      <div class="sec-head"><h2>Auto-transition from agent run state</h2><span class="sec-meta">non-destructive</span></div>
+      <div class="sec-body">
+        <p>
+          The agent run-state (<code>idle · thinking · running · queued</code>) is transient and
+          already streams to the renderer; board status is persistent. They are different axes &mdash;
+          keep them separate, but let run-state <em>nudge</em> status so the board stays honest
+          without manual fiddling. Rules are intentionally minimal and never override an explicit
+          user decision:
+        </p>
+        <ul class="flatlist ok">
+          <li><b>Todo &rarr; In&nbsp;progress</b> automatically the first time a chat&rsquo;s agent runs (run-state leaves <code>idle</code>).</li>
+          <li><b>No auto-move out of</b> <span class="chip done"><span class="d"></span>Done</span> or <span class="chip blocked"><span class="d"></span>Blocked</span> &mdash; those are user judgments.</li>
+          <li><b>Never auto-Done.</b> &ldquo;Agent finished&rdquo; &ne; &ldquo;work accepted&rdquo;. Completion stays a manual drag (optionally suggest Review on <code>agent_end</code>).</li>
+          <li>A running chat shows a live indicator on its card (reuse the existing Soft&nbsp;Cells loader) regardless of column.</li>
+        </ul>
+        <p style="margin-top:14px">
+          Net: you create a chat (Todo), send a prompt (auto &rarr; In&nbsp;progress, card pulses),
+          and you decide when it&rsquo;s Review/Done/Blocked. One automatic edge, everything else
+          explicit.
+        </p>
+      </div>
+    </section>
+
+    <section id="surface">
+      <div class="sec-head"><h2>Code surface</h2><span class="sec-meta">main &middot; ipc &middot; renderer</span></div>
+      <div class="sec-body">
+        <p>The change rides the existing seams; nothing structural is invented.</p>
+        <table class="wm">
+          <tr><th>Layer</th><th>File</th><th>Change</th></tr>
+          <tr><td>Persistence</td><td class="mono">src/main/db.ts</td><td>Add <code>status</code> column + idempotent migration; <code>chatsRepo.setStatus</code>; map <code>status</code> in row reads.</td></tr>
+          <tr><td>IPC contract</td><td class="mono">src/shared/ipc.ts</td><td><code>ChatStatus</code> type; add <code>status</code> to <code>Chat</code>; new channel <code>chats:setStatus</code>.</td></tr>
+          <tr><td>Main handler</td><td class="mono">src/main/projects-bridge.ts</td><td>Handler for <code>chats:setStatus</code> (sits with the other chat CRUD handlers).</td></tr>
+          <tr><td>Preload</td><td class="mono">src/preload/index.ts</td><td><code>window.pi.chats.setStatus(id, status)</code>.</td></tr>
+          <tr><td>Renderer store</td><td class="mono">src/renderer/stores/projects.ts</td><td><code>setChatStatus</code> action (optimistic + persist); status already arrives on the <code>Chat</code> objects.</td></tr>
+          <tr><td>View</td><td class="mono">new KanbanBoard.tsx (+ .module.css)</td><td>Columns from the status enum; cards from <code>chatsByProject</code>; click card &rarr; open chat; drag &rarr; <code>setChatStatus</code>.</td></tr>
+          <tr><td>Navigation</td><td class="mono">App view union + Sidebar</td><td>Add a <code>board</code> view; a sidebar entry (the &ldquo;Automations&rdquo;-style stub slot) and a per-project board affordance.</td></tr>
+        </table>
+        <h4>Drag &amp; drop</h4>
+        <p>
+          No DnD library is in <code>package.json</code>. For a single-user, few-dozen-card board,
+          native HTML5 drag events (<code>draggable</code> + <code>dragover</code>/<code>drop</code>)
+          are enough and add zero dependencies &mdash; recommended first cut. A keyboard fallback
+          (move-to-column menu on the card) covers accessibility without a library.
+        </p>
+      </div>
+    </section>
+
+    <section id="global">
+      <div class="sec-head"><h2>The global (cross-project) board</h2><span class="sec-meta">scope &amp; scale</span></div>
+      <div class="sec-body">
+        <p>
+          Same columns; cards span all projects, each tagged with a project chip and color.
+          Two viable layouts &mdash; recommend <b>columns with project swimlanes</b> (rows per
+          project inside each status column) because it preserves the &ldquo;by project&rdquo;
+          mental model while still reading status left-to-right. A project filter collapses it to
+          one project (which equals the per-project board &mdash; so the per-project board can be
+          literally the global board pre-filtered).
+        </p>
+        <div class="two-col">
+          <div class="panel">
+            <h4>Recommended</h4>
+            <small>Status columns &times; project swimlanes</small>
+            <p>One render path. Per-project = global with a fixed project filter. Less code, consistent behavior.</p>
+          </div>
+          <div class="panel">
+            <h4>Scale note</h4>
+            <small>Stays simple for now</small>
+            <p>Chats are low-volume per user. If a board ever exceeds a few hundred cards, add windowing &mdash; specified, not needed at current scale.</p>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section id="build">
+      <div class="sec-head"><h2>Build order</h2><span class="sec-meta">smallest shippable first</span></div>
+      <div class="sec-body">
+        <p>Each step is independently shippable and verifiable; later steps are additive.</p>
+        <div class="stepper">
+          <div class="step-n">1</div>
+          <div class="step-body"><div class="h">Persistence &amp; contract</div>
+            <div class="d"><code>status</code> column + migration, <code>ChatStatus</code> type, <code>Chat.status</code>, <code>chatsRepo.setStatus</code>, <code>chats:setStatus</code> IPC + preload + store action. No UI yet &mdash; verify with typecheck/tests.</div></div>
+          <div class="step-line"></div>
+          <div class="step-n">2</div>
+          <div class="step-body"><div class="h">Per-project board (3 columns)</div>
+            <div class="d"><code>todo · doing · done</code>, cards from the active project&rsquo;s chats, click-to-open, native drag to set status. Reachable from the project.</div></div>
+          <div class="step-line"></div>
+          <div class="step-n">3</div>
+          <div class="step-body"><div class="h">Auto-transition + running indicator</div>
+            <div class="d">Todo&rarr;In&nbsp;progress on first run; Soft&nbsp;Cells pulse on running cards. Non-destructive guards.</div></div>
+          <div class="step-line"></div>
+          <div class="step-n">4</div>
+          <div class="step-body"><div class="h">Global board + swimlanes + filter</div>
+            <div class="d">Top-level sidebar entry; project swimlanes; project filter (per-project board becomes the filtered global). Add <code>review · blocked</code>.</div></div>
+          <div class="step-line"></div>
+          <div class="step-n">5</div>
+          <div class="step-body"><div class="h">Polish (specified, optional)</div>
+            <div class="d">Card metadata (model, last activity, token/cost), archived filter, keyboard move, WIP hints, rename/delete from card.</div></div>
+        </div>
+      </div>
+    </section>
+
+    <section id="risks">
+      <div class="sec-head"><h2>Risks &amp; tradeoffs</h2><span class="sec-meta">watch list</span></div>
+      <div class="sec-body">
+        <ul class="flatlist danger">
+          <li><b>Migration on existing DBs.</b> The <code>CREATE TABLE IF NOT EXISTS</code> pattern won&rsquo;t add the column for existing users &mdash; the <code>PRAGMA</code>-guarded <code>ALTER</code> is mandatory, not optional, or older installs break on read.</li>
+          <li><b>Run-state vs. status confusion.</b> They look similar (&ldquo;in progress&rdquo;). Keep wording distinct (status = column, run-state = the pulse) and never let one silently rewrite the other beyond the single Todo&rarr;Doing edge.</li>
+          <li><b>Status drift.</b> Without auto-Done, cards rot in In&nbsp;progress. Mitigate with a gentle &ldquo;suggest Review&rdquo; on <code>agent_end</code>, not a forced move.</li>
+          <li><b>Scope creep into a task manager.</b> Resist sub-tasks, assignees, due dates &mdash; this is a single-user lens on chats, not Jira. Keep the column set frozen at five.</li>
+          <li><b>Sidebar vs. board duplication.</b> Two ways to see chats. Keep the sidebar as the recency/last-touched list; the board owns status. Don&rsquo;t reorder the sidebar by status.</li>
+        </ul>
+      </div>
+    </section>
+
+    <section id="questions">
+      <div class="sec-head"><h2>Open questions &mdash; decide before coding</h2><span class="sec-meta">needs your call</span></div>
+      <div class="sec-body">
+        <div class="qbox"><div class="q">1 &middot; Card unit: chats, or a separate task entity?</div>
+          <div class="a">Recommendation: chats. A separate task entity doubles persistence and the user&rsquo;s mental model for little gain at single-user scale. Confirm.</div></div>
+        <div class="qbox"><div class="q">2 &middot; Column set: 3 (<code>todo/doing/done</code>) or 5 (+<code>review/blocked</code>)?</div>
+          <div class="a">Recommendation: ship 3, enable 5 by default with the extras collapsible. Your call on whether <code>blocked</code> earns a column vs. a card flag.</div></div>
+        <div class="qbox"><div class="q">3 &middot; Where does the global board live?</div>
+          <div class="a">A new top-level sidebar entry (a real one, replacing/【beside the &ldquo;Automations&rdquo; stub), or a tab in the right Inspector pane? Recommendation: top-level view &mdash; it spans projects, the Inspector is project/chat-scoped.</div></div>
+        <div class="qbox"><div class="q">4 &middot; Auto-transitions: just Todo&rarr;In&nbsp;progress, or also suggest Review on finish?</div>
+          <div class="a">Recommendation: auto Todo&rarr;In&nbsp;progress only; a dismissible &ldquo;move to Review?&rdquo; hint on <code>agent_end</code>. No automatic Done, ever.</div></div>
+        <div class="qbox"><div class="q">5 &middot; Drag&amp;drop: native HTML5 (no dep) or a small DnD lib?</div>
+          <div class="a">Recommendation: native first &mdash; zero dependencies, enough for this scale; revisit only if multi-select/animated reordering is wanted.</div></div>
+      </div>
+    </section>
+
+    <div class="footer">
+      <span>pi-desktop &middot; Kanban boards &mdash; proposal, designed not implemented</span>
+      <span>Awaiting answers to the five open questions before implementation.</span>
+    </div>
+
+  </div>
+</body>
+</html>

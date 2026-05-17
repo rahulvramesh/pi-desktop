@@ -12,26 +12,47 @@
   display: flex;
   align-items: center;
   gap: 4px;
-  padding: 0 8px 0 12px;
+  min-width: 0;
+  padding: 0 6px 0 8px;
   border-bottom: 1px solid var(--border);
   font-size: 12px;
   color: var(--ink-2);
   font-weight: 500;
 }
 
+/* Tab group flexes and shrinks; the hide button is a pinned sibling so it can
+   never be clipped out of the fixed-width pane. */
+.tabs {
+  display: flex;
+  flex: 1 1 auto;
+  min-width: 0;
+  gap: 2px;
+  overflow: hidden;
+}
+
 .tab {
   appearance: none;
   border: 0;
   background: transparent;
-  padding: 4px 10px;
+  padding: 4px 7px;
   border-radius: 6px;
   font: inherit;
-  font-size: 12px;
+  font-size: 11.5px;
   color: var(--ink-3);
   cursor: pointer;
   display: inline-flex;
   align-items: center;
   gap: 4px;
+  flex: 0 1 auto;
+  min-width: 0;
+}
+.tab svg {
+  flex: 0 0 auto;
+}
+.tabLabel {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 .tab:hover {
   color: var(--ink);
@@ -41,16 +62,13 @@
   background: color-mix(in srgb, var(--ink) 5%, transparent);
 }
 
-.spacer {
-  flex: 1;
-}
-
 .iconBtn {
   appearance: none;
   border: 0;
   background: transparent;
   width: 26px;
   height: 26px;
+  flex: 0 0 26px;
   border-radius: 6px;
   display: inline-flex;
   align-items: center;
@@ -108,6 +126,79 @@
   color: var(--ink-2);
 }
 
+/* Files tab — workspace tree + changes */
+.files {
+  padding: 6px 6px 12px;
+}
+.treeSection {
+  padding: 8px 10px 5px;
+  font-size: 10.5px;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--ink-3);
+}
+.fileRow {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 3px 8px;
+  border-radius: 5px;
+  font-size: 12.5px;
+  color: var(--ink-2);
+  cursor: pointer;
+  white-space: nowrap;
+  line-height: 1.5;
+}
+.fileRow:hover {
+  background: color-mix(in srgb, var(--ink) 5%, transparent);
+}
+.fileSelected {
+  background: var(--accent-soft);
+  color: var(--accent);
+}
+.chev {
+  color: var(--ink-4);
+  transition: transform 0.12s;
+  flex: 0 0 12px;
+}
+.chevOpen {
+  transform: rotate(90deg);
+}
+.chevSpace {
+  width: 12px;
+  flex: 0 0 12px;
+}
+.iconAccent {
+  color: var(--accent);
+  flex: 0 0 14px;
+}
+.iconMuted {
+  color: var(--ink-3);
+  flex: 0 0 14px;
+}
+.dirty,
+.added {
+  /* status is conveyed by the trailing badge; the row tint stays subtle */
+  color: var(--ink);
+}
+.badgeDirty,
+.badgeAdded {
+  margin-left: auto;
+  font-family: var(--mono);
+  font-size: 10px;
+  padding: 0 4px;
+  border-radius: 3px;
+}
+.badgeDirty {
+  color: var(--warn);
+  background: var(--warn-soft);
+}
+.badgeAdded {
+  color: var(--ok);
+  background: var(--ok-soft);
+}
+
 .add {
   background: var(--add-bg);
   color: var(--add);
@@ -124,4 +215,234 @@
   display: block;
   padding: 0 14px;
   color: var(--ink-2);
+}
+
+/* Developer RPC trace --------------------------------------------------- */
+.rpcPanel {
+  height: 100%;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  background: color-mix(in srgb, var(--surface-sunken) 55%, var(--surface));
+}
+
+.rpcToolbar {
+  flex: 0 0 auto;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 9px 10px;
+  border-bottom: 1px solid var(--border);
+  background: var(--surface);
+}
+.rpcTitle {
+  font-size: 12px;
+  font-weight: 650;
+  color: var(--ink);
+}
+.rpcCount {
+  margin-right: auto;
+  font-family: var(--mono);
+  font-size: 10.5px;
+  color: var(--ink-3);
+  background: color-mix(in srgb, var(--ink) 6%, transparent);
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  padding: 1px 6px;
+}
+.rpcClear {
+  appearance: none;
+  border: 1px solid var(--border);
+  background: var(--surface-2);
+  color: var(--ink-2);
+  border-radius: 6px;
+  padding: 3px 7px;
+  font: inherit;
+  font-size: 11px;
+  cursor: pointer;
+}
+.rpcClear:hover:not(:disabled) {
+  color: var(--ink);
+  border-color: var(--border-strong);
+}
+.rpcClear:disabled {
+  opacity: 0.45;
+  cursor: default;
+}
+
+.rpcSearchRow,
+.rpcFilters {
+  flex: 0 0 auto;
+  display: flex;
+  gap: 4px;
+  padding: 8px 10px;
+  border-bottom: 1px solid var(--border);
+  background: color-mix(in srgb, var(--surface) 80%, var(--surface-sunken));
+  overflow-x: auto;
+}
+.rpcSearchRow {
+  align-items: center;
+  padding-bottom: 0;
+  border-bottom: 0;
+}
+.rpcSearchInput {
+  flex: 1;
+  min-width: 0;
+  height: 24px;
+  border: 1px solid var(--border);
+  border-radius: 7px;
+  background: var(--surface-2);
+  color: var(--ink);
+  font: inherit;
+  font-family: var(--mono);
+  font-size: 11px;
+  padding: 0 8px;
+  outline: none;
+}
+.rpcSearchInput::placeholder {
+  color: var(--ink-4);
+}
+.rpcSearchInput:focus {
+  border-color: var(--accent-edge);
+  box-shadow: 0 0 0 2px var(--accent-soft);
+}
+.rpcFilter {
+  appearance: none;
+  border: 1px solid transparent;
+  background: transparent;
+  color: var(--ink-3);
+  border-radius: 999px;
+  padding: 2px 7px;
+  font: inherit;
+  font-size: 10.5px;
+  cursor: pointer;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+.rpcFilter:hover {
+  color: var(--ink);
+}
+.rpcFilterActive {
+  color: var(--accent);
+  background: var(--accent-soft);
+  border-color: var(--accent-edge);
+}
+
+.rpcList {
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+  padding: 8px;
+}
+.rpcEmpty {
+  padding: 18px 10px;
+  color: var(--ink-3);
+  font-size: 12px;
+  line-height: 1.55;
+}
+.rpcEmpty code {
+  font-family: var(--mono);
+  color: var(--ink-2);
+}
+.rpcEntry {
+  border: 1px solid var(--border);
+  border-left-width: 3px;
+  border-radius: 8px;
+  background: var(--surface);
+  box-shadow: var(--shadow-sm);
+  overflow: hidden;
+}
+.rpcEntry + .rpcEntry {
+  margin-top: 8px;
+}
+.rpcEntryHead {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 7px 8px 5px;
+  min-width: 0;
+}
+.rpcDirection {
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+}
+.rpcMethod {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--ink);
+  font-family: var(--mono);
+  font-size: 11.5px;
+}
+.rpcId,
+.rpcTime {
+  flex: 0 0 auto;
+  color: var(--ink-3);
+  font-family: var(--mono);
+  font-size: 10.5px;
+}
+.rpcTime {
+  margin-left: auto;
+}
+.rpcMeta {
+  display: flex;
+  gap: 8px;
+  padding: 0 8px 6px;
+  font-family: var(--mono);
+  font-size: 10.5px;
+  color: var(--ink-3);
+}
+.rpcErrText {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--err);
+}
+.rpcRaw {
+  margin: 0;
+  max-height: 220px;
+  overflow: auto;
+  padding: 8px;
+  border-top: 1px solid var(--border);
+  background: color-mix(in srgb, var(--surface-sunken) 75%, var(--surface));
+  color: var(--ink-2);
+  font-family: var(--mono);
+  font-size: 10.8px;
+  line-height: 1.45;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+.rpcRequest {
+  border-left-color: var(--accent);
+}
+.rpcRequest .rpcDirection {
+  color: var(--accent);
+}
+.rpcResponse {
+  border-left-color: var(--ok);
+}
+.rpcResponse .rpcDirection {
+  color: var(--ok);
+}
+.rpcEvent {
+  border-left-color: var(--warn);
+}
+.rpcEvent .rpcDirection {
+  color: var(--warn);
+}
+.rpcStdout {
+  border-left-color: var(--ink-3);
+}
+.rpcStdout .rpcDirection {
+  color: var(--ink-3);
+}
+.rpcError {
+  border-left-color: var(--err);
+}
+.rpcError .rpcDirection {
+  color: var(--err);
 }

@@ -7,33 +7,211 @@
   width: 260px;
 }
 
-.project {
-  padding: 10px 12px 8px;
-  display: flex;
-  align-items: center;
-  gap: 9px;
-  border-bottom: 1px solid var(--border);
-}
-.projectMeta {
-  flex: 1;
-  min-width: 0;
+/* Fixed top nav: new chat / search / skills / plugins / automations */
+.nav {
+  padding: 8px 8px 6px;
   display: flex;
   flex-direction: column;
+  gap: 1px;
 }
-.projectName {
-  font-size: 12.5px;
-  font-weight: 600;
-  color: var(--ink);
-}
-.projectBranch {
-  font-family: var(--mono);
-  font-size: 10.5px;
-  color: var(--ink-3);
-  display: inline-flex;
+.navItem {
+  appearance: none;
+  border: 0;
+  background: transparent;
+  font: inherit;
+  text-align: left;
+  display: flex;
   align-items: center;
-  gap: 4px;
+  gap: 10px;
+  padding: 6px 10px;
+  border-radius: 6px;
+  font-size: 13px;
+  color: var(--ink);
+  cursor: pointer;
+}
+.navItem:hover {
+  background: color-mix(in srgb, var(--ink) 6%, transparent);
+}
+.navIcon {
+  color: var(--ink-2);
+  flex: 0 0 15px;
+}
+.navDisabled {
+  color: var(--ink-4);
+  cursor: default;
+}
+.navDisabled:hover {
+  background: transparent;
+}
+.navDisabled .navIcon {
+  color: var(--ink-4);
 }
 
+.body {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  overflow-x: hidden;
+  padding: 4px 8px 10px;
+}
+
+.section {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 12px 8px 6px;
+  font-size: 11.5px;
+  font-weight: 500;
+  color: var(--ink-3);
+}
+
+/* Inline affordances on section / project / chat rows (add, new, delete). */
+.rowAction {
+  appearance: none;
+  border: 0;
+  background: transparent;
+  color: var(--ink-4);
+  width: 20px;
+  height: 20px;
+  border-radius: 5px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  flex: 0 0 auto;
+}
+.rowAction:hover {
+  background: color-mix(in srgb, var(--ink) 8%, transparent);
+  color: var(--ink);
+}
+
+/* Project group header row */
+.projectRow {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  padding: 4px 8px;
+  border-radius: 6px;
+  font-size: 13px;
+  color: var(--ink);
+  cursor: pointer;
+  white-space: nowrap;
+}
+.projectRow:hover {
+  background: color-mix(in srgb, var(--ink) 5%, transparent);
+}
+.projectIcon {
+  color: var(--ink-2);
+  flex: 0 0 14px;
+}
+.projectName {
+  flex: 1;
+  min-width: 0;
+  font-weight: 500;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.projectSub {
+  font-size: 12px;
+  color: var(--ink-3);
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.chev {
+  color: var(--ink-4);
+  transition: transform 0.12s;
+  flex: 0 0 12px;
+}
+.chevOpen {
+  transform: rotate(90deg);
+}
+.chevSpace {
+  width: 12px;
+  flex: 0 0 12px;
+}
+
+.alert {
+  color: var(--del);
+  flex: 0 0 13px;
+}
+
+/* Chat rows — recent (flush) and project children (indented) */
+.chatRow {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 8px;
+  border-radius: 6px;
+  font-size: 13px;
+  color: var(--ink-2);
+  cursor: pointer;
+  white-space: nowrap;
+}
+.chatRow:hover {
+  background: color-mix(in srgb, var(--ink) 5%, transparent);
+}
+.chatIndent {
+  padding-left: 27px;
+}
+.chatTitle {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.age {
+  font-size: 11.5px;
+  color: var(--ink-4);
+  flex: 0 0 auto;
+}
+
+/* Running indicator on the active chat (replaces the age while streaming) —
+   the same Soft Cells π loader used in the chat. */
+.runIndicator {
+  display: inline-flex;
+  align-items: center;
+  flex: 0 0 auto;
+}
+.selected {
+  background: color-mix(in srgb, var(--ink) 8%, transparent);
+  color: var(--ink);
+}
+.empty {
+  color: var(--ink-4);
+  cursor: default;
+}
+.empty:hover {
+  background: transparent;
+}
+
+.footer {
+  padding: 10px 12px;
+  border-top: 1px solid var(--border);
+  display: flex;
+  align-items: center;
+  background: color-mix(in srgb, var(--surface) 80%, var(--bg));
+}
+.settingsBtn {
+  appearance: none;
+  border: 1px solid var(--border);
+  background: var(--surface-2);
+  color: var(--ink-2);
+  width: 100%;
+  height: 30px;
+  padding: 0 10px;
+  border-radius: 7px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  font: 500 12px/1 var(--sans);
+  cursor: pointer;
+}
+.settingsBtn:hover {
+  border-color: var(--border-strong);
+  color: var(--ink);
+}
 .iconBtn {
   appearance: none;
   border: 0;
@@ -50,188 +228,4 @@
 .iconBtn:hover {
   background: color-mix(in srgb, var(--ink) 7%, transparent);
   color: var(--ink);
-}
-
-.tabs {
-  display: flex;
-  gap: 2px;
-  padding: 8px 8px 4px;
-  border-bottom: 1px solid var(--border);
-}
-.tab {
-  flex: 1;
-  padding: 6px 8px;
-  border-radius: 6px;
-  font-size: 11.5px;
-  font-weight: 500;
-  color: var(--ink-3);
-  cursor: pointer;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 5px;
-  border: 1px solid transparent;
-  background: transparent;
-  transition: all 0.12s;
-}
-.tab:hover {
-  background: color-mix(in srgb, var(--ink) 5%, transparent);
-  color: var(--ink-2);
-}
-.tabActive {
-  background: var(--surface-2);
-  color: var(--ink);
-  box-shadow: var(--shadow-sm);
-  border-color: var(--border);
-}
-
-.search {
-  margin: 8px 10px;
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  padding: 5px 9px;
-  background: var(--surface-2);
-  border: 1px solid var(--border);
-  border-radius: 7px;
-  font-size: 12px;
-}
-.search input {
-  flex: 1;
-  border: 0;
-  outline: 0;
-  background: transparent;
-  font: inherit;
-  color: var(--ink);
-  min-width: 0;
-}
-.search input::placeholder {
-  color: var(--ink-4);
-}
-
-.body {
-  flex: 1;
-  min-height: 0;
-  overflow-y: auto;
-  overflow-x: hidden;
-  padding: 4px 6px 8px;
-}
-
-.section {
-  padding: 10px 12px 6px;
-  font-size: 10.5px;
-  font-weight: 600;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
-  color: var(--ink-3);
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-}
-
-.row {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  padding: 3px 6px 3px 6px;
-  border-radius: 5px;
-  font-size: 12.5px;
-  color: var(--ink-2);
-  cursor: pointer;
-  white-space: nowrap;
-  line-height: 1.5;
-}
-.row:hover {
-  background: color-mix(in srgb, var(--ink) 5%, transparent);
-}
-.selected {
-  background: var(--accent-soft);
-  color: var(--accent);
-}
-
-.chev {
-  width: 12px;
-  height: 12px;
-  color: var(--ink-4);
-  transition: transform 0.12s;
-  flex: 0 0 12px;
-}
-.chevOpen {
-  transform: rotate(90deg);
-}
-.chevSpace {
-  width: 12px;
-  flex: 0 0 12px;
-}
-
-.iconAccent {
-  color: var(--accent);
-  flex: 0 0 14px;
-}
-.iconMuted {
-  color: var(--ink-3);
-  flex: 0 0 14px;
-}
-
-.badgeDirty,
-.badgeAdded {
-  margin-left: auto;
-  font-family: var(--mono);
-  font-size: 10px;
-  padding: 0 4px;
-  border-radius: 3px;
-}
-.badgeDirty {
-  color: var(--warn);
-  background: var(--warn-soft);
-}
-.badgeAdded {
-  color: var(--ok);
-  background: var(--ok-soft);
-}
-
-.stub {
-  padding: 18px 14px;
-  font-size: 12px;
-  color: var(--ink-3);
-  border: 1px dashed var(--border-strong);
-  border-radius: 8px;
-  margin: 8px;
-  text-align: center;
-}
-
-.footer {
-  padding: 10px 12px;
-  border-top: 1px solid var(--border);
-  display: flex;
-  align-items: center;
-  gap: 9px;
-  background: color-mix(in srgb, var(--surface) 80%, var(--bg));
-}
-.avatar {
-  width: 26px;
-  height: 26px;
-  border-radius: 7px;
-  background: linear-gradient(135deg, #6b8aa3, #344a5e);
-  color: white;
-  font-size: 11.5px;
-  font-weight: 600;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-}
-.userMeta {
-  flex: 1;
-  min-width: 0;
-  display: flex;
-  flex-direction: column;
-}
-.userName {
-  font-size: 12px;
-  font-weight: 500;
-  color: var(--ink);
-}
-.userTier {
-  font-size: 11px;
-  color: var(--ink-3);
 }

@@ -10,11 +10,38 @@
 
 export type AgentRunState = 'idle' | 'thinking' | 'running' | 'queued';
 
-export type ThinkingLevel = 'off' | 'low' | 'medium' | 'high';
+/** Full pi set. `xhigh` is OpenAI codex-max only; pi clamps unsupported. */
+export type ThinkingLevel = 'off' | 'minimal' | 'low' | 'medium' | 'high' | 'xhigh';
+
+/** A model pi has configured (built-in + ~/.pi/agent/models.json, merged). */
+export type ModelInputKind = 'text' | 'image';
+
+export interface ModelInfo {
+  provider: string;
+  id: string;
+  name: string;
+  /** Supports extended thinking — gates the thinking-effort picker. */
+  reasoning: boolean;
+  /** Input modalities advertised by pi's Model.input field. */
+  input: ModelInputKind[];
+  contextWindow: number;
+}
+
+/** Image attachment shape accepted by pi RPC and the SDK. */
+export interface AgentImageContent {
+  type: 'image';
+  /** Base64-encoded image bytes (no data: URL prefix). */
+  data: string;
+  /** MIME type, e.g. image/png, image/jpeg, image/webp, image/gif. */
+  mimeType: string;
+  /** Renderer-only metadata for transcript thumbnails; stripped before RPC. */
+  name?: string;
+  size?: number;
+}
 
 export interface PromptOptions {
-  /** Optional image attachments as data URLs. */
-  images?: string[];
+  /** Optional image attachments. Sent as pi ImageContent over RPC. */
+  images?: AgentImageContent[];
   /** When streaming, how to queue: "steer" interrupts, "followUp" waits. */
   streamingBehavior?: 'steer' | 'followUp';
 }
@@ -23,15 +50,36 @@ export interface PromptOptions {
  * Snapshot of the agent's surface state. Serializable across IPC.
  * Internal SDK shapes (Model, Tool, etc.) get flattened to plain identifiers.
  */
+export interface TokenUsageSummary {
+  /** Input tokens billed/recorded by assistant responses. */
+  input: number;
+  /** Output tokens billed/recorded by assistant responses. */
+  output: number;
+  /** Prompt-cache read tokens. */
+  cacheRead: number;
+  /** Prompt-cache write tokens. */
+  cacheWrite: number;
+  /** Total = input + output + cacheRead + cacheWrite. */
+  total: number;
+}
+
 export interface AgentState {
   runState: AgentRunState;
   modelProvider: string;
   modelId: string;
   thinkingLevel: ThinkingLevel;
-  /** Total prompt+completion tokens used so far in this session. */
+  /** Current context usage estimate, or token total when context usage is unavailable. */
   tokensUsed: number;
   /** Context window size for the active model. */
   tokensMax: number;
+  /** Full session token accounting from pi get_session_stats. */
+  tokenUsage: TokenUsageSummary;
+  /** Total session cost in USD, as reported by pi. */
+  costUsd: number;
+  /** Current context-window percentage; null after compaction until next LLM response. */
+  contextPercent: number | null;
+  /** Whether pi auto-compaction is enabled. */
+  autoCompactionEnabled: boolean;
   sessionId: string;
   errorMessage?: string;
 }
@@ -56,17 +104,28 @@ export interface ToolCallSummary {
 }
 
 /**
- * Plain-text message record persisted across renderer reloads. The renderer
- * appends streamed text into the last assistant message as text_delta events
- * arrive; tool cards live on the assistant message that requested them.
+ * An ordered fragment of a message. A message is a timeline of these in the
+ * exact order they streamed in — text, reasoning, and tool calls interleaved
+ * as they actually occurred (not bucketed by kind), so the transcript reads
+ * chronologically including the final answer.
+ */
+export type MessagePart =
+  | { kind: 'text'; text: string }
+  | { kind: 'thinking'; text: string }
+  | { kind: 'image'; image: AgentImageContent }
+  | { kind: 'tool'; tool: ToolCallSummary };
+
+/**
+ * A message record. `parts` is the chronological timeline; consecutive deltas
+ * of the same kind coalesce into the trailing part, and a kind switch (text →
+ * thinking → tool → text …) opens a new part, preserving arrival order.
  */
 export interface AgentMessage {
   id: string;
   role: 'user' | 'assistant' | 'system';
   /** Wall-clock display string, e.g. "10:42". */
   time: string;
-  text: string;
-  toolCalls: ToolCallSummary[];
+  parts: MessagePart[];
 }
 
 /**
@@ -79,8 +138,10 @@ export type AgentEvent =
   | { type: 'agent_start' }
   | { type: 'agent_end' }
   | { type: 'state_changed'; state: AgentState }
+  | { type: 'queue_update'; steering: string[]; followUp: string[] }
   | { type: 'message_start'; message: AgentMessage }
   | { type: 'text_delta'; messageId: string; delta: string }
+  | { type: 'thinking_delta'; messageId: string; delta: string }
   | { type: 'message_end'; messageId: string }
   | {
       type: 'tool_execution_start';
@@ -103,20 +164,62 @@ export type AgentEvent =
 
 export type AgentEventListener = (event: AgentEvent) => void;
 
+export type RpcLogDirection = 'request' | 'response' | 'event' | 'stdout' | 'stderr';
+
+/**
+ * Developer-mode trace entry for the JSONL RPC transport (`pi --mode rpc`).
+ * Entries are redacted/truncated by the backend before crossing IPC.
+ */
+export interface RpcLogEntry {
+  id: string;
+  timestamp: number;
+  direction: RpcLogDirection;
+  /** The RPC command/event type, e.g. prompt, get_state, message_update. */
+  method?: string;
+  /** Request id (`r-…`) when the command expects a response. */
+  requestId?: string;
+  /** Whether the source command expected a response. Present on requests. */
+  expectResponse?: boolean;
+  /** Response success bit, if this is an RPC response. */
+  success?: boolean;
+  /** Round-trip time from request write to response read, when known. */
+  durationMs?: number;
+  /** Redacted JSONL line or stderr/stdout chunk. May be truncated for safety. */
+  raw: string;
+  /** Parsed + redacted payload for structured display, when available. */
+  payload?: unknown;
+  error?: string;
+}
+
+export type RpcLogListener = (entry: RpcLogEntry) => void;
+
 /**
  * The contract. Adding a method here requires an IPC change and renderer
  * support; that's deliberate, the renderer is the only direct consumer.
  */
 export interface AgentBackend {
   prompt(text: string, options?: PromptOptions): Promise<void>;
-  steer(text: string): Promise<void>;
-  followUp(text: string): Promise<void>;
+  steer(text: string, images?: AgentImageContent[]): Promise<void>;
+  followUp(text: string, images?: AgentImageContent[]): Promise<void>;
   abort(): Promise<void>;
 
   subscribe(listener: AgentEventListener): () => void;
 
+  /** Optional developer-mode RPC trace stream. Implemented by RpcBackend only. */
+  subscribeRpcLogs?(listener: RpcLogListener): () => void;
+
   getState(): Promise<AgentState>;
   getMessages(): Promise<AgentMessage[]>;
+
+  /** Models pi has configured (for the composer's model picker). */
+  getAvailableModels(): Promise<ModelInfo[]>;
+
+  /**
+   * The pi JSONL session file backing the active conversation, or null if not
+   * yet known / not applicable. Main-process only — used to persist a chat's
+   * resume pointer; never crosses IPC.
+   */
+  getSessionFile(): Promise<string | null>;
 
   setModel(provider: string, modelId: string): Promise<void>;
   setThinkingLevel(level: ThinkingLevel): Promise<void>;
@@ -132,5 +235,5 @@ export interface AgentBackend {
 export type AgentBackendConfig =
   | { kind: 'mock' }
   | { kind: 'sdk-local'; cwd: string }
-  | { kind: 'rpc-local' }
-  | { kind: 'rpc-ssh'; host: string };
+  | { kind: 'rpc-local'; cwd: string }
+  | { kind: 'rpc-ssh'; host: string; cwd: string };

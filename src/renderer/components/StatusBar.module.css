@@ -16,25 +16,12 @@
   display: inline-flex;
   align-items: center;
   gap: 5px;
+  min-width: 0;
 }
 
-.dot {
-  width: 6px;
-  height: 6px;
-  border-radius: 50%;
-  background: currentColor;
-}
-.ok {
-  color: var(--ok);
-}
-.warn {
-  color: var(--warn);
-}
-.accent {
-  color: var(--accent);
-}
-.err {
-  color: var(--err);
+.usage {
+  color: var(--ink-2);
+  white-space: nowrap;
 }
 
 .spacer {

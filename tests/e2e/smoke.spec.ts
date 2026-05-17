@@ -24,8 +24,21 @@ test.describe('Pi Desktop smoke (mock backend)', () => {
     win.on('pageerror', (e) => process.stderr.write(`[rndr!] ${e.message}\n`));
     await win.waitForLoadState('domcontentloaded');
 
-    // Wait for the title bar breadcrumb — confirms the renderer mounted past hydrate().
-    await expect(win.locator('text=Level loader v2').first()).toBeVisible();
+    // Seed a deterministic project/chat through the preload API. The app no
+    // longer ships hardcoded sidebar data, so the smoke test owns its fixture.
+    await win.evaluate(async (root) => {
+      await window.pi.prefs.set({ hasSeenWelcome: true });
+      const project = await window.pi.projects.add(root, 'Level loader v2');
+      const chats = await window.pi.chats.list(project.id);
+      const existing = chats.find((c) => c.title === 'Level loader v2');
+      if (!existing) await window.pi.chats.create(project.id, 'Level loader v2');
+    }, projectRoot);
+    await win.reload();
+    await win.waitForLoadState('domcontentloaded');
+
+    const chatRow = win.locator('[role="button"][title="Level loader v2"]').last();
+    await expect(chatRow).toBeVisible({ timeout: 8_000 });
+    await chatRow.click();
 
     // Composer textarea is visible and accepts input.
     const composer = win.locator('textarea[aria-label="Message Pi"]');
@@ -42,7 +55,7 @@ test.describe('Pi Desktop smoke (mock backend)', () => {
     await expect(win.locator('text=Loader.ts').first()).toBeVisible({ timeout: 8_000 });
 
     // Tweaks panel opens; selecting "dark" flips data-theme.
-    await win.locator('button[aria-label="Tweaks (Alt+T)"]').click();
+    await win.locator('button[aria-label="Tweaks"]').click();
     await win.locator('button:has-text("dark")').first().click();
     await expect
       .poll(async () => win.evaluate(() => document.documentElement.dataset['theme']))

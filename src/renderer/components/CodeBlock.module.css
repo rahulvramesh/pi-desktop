@@ -1,0 +1,18 @@
+/* Matches ToolCallCard's .body container metrics so highlighted code aligns
+   with the rest of the card chrome. */
+.pre {
+  margin: 0;
+  padding: 10px 14px;
+  line-height: 1.55;
+  white-space: pre;
+  font-family: var(--mono);
+  font-size: 12px;
+  color: var(--ink-2);
+  overflow-x: auto;
+}
+.pre code {
+  font: inherit;
+  background: none;
+  border: 0;
+  padding: 0;
+}

@@ -1,26 +1,3 @@
-.fab {
-  position: fixed;
-  right: 16px;
-  bottom: 16px;
-  width: 36px;
-  height: 36px;
-  border-radius: 10px;
-  background: var(--surface-2);
-  border: 1px solid var(--border-strong);
-  box-shadow: var(--shadow-md);
-  color: var(--ink-2);
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  cursor: pointer;
-  z-index: 50;
-  transition: transform 0.15s, color 0.15s;
-}
-.fab:hover {
-  color: var(--accent);
-  transform: translateY(-1px);
-}
-
 .panel {
   position: fixed;
   right: 16px;

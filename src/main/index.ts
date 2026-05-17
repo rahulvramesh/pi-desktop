@@ -16,6 +16,8 @@ import { dirname, join } from 'node:path';
 
 import { installAgentBridge, disposeAgentBridge } from './agent-bridge.js';
 import { installPrefsBridge } from './prefs-bridge.js';
+import { installProjectsBridge } from './projects-bridge.js';
+import { closeDb } from './db.js';
 import { IPC } from '../shared/ipc.js';
 
 const __filename = fileURLToPath(import.meta.url);
@@ -153,8 +155,9 @@ function installWindowControlBridge(): void {
 void app.whenReady().then(async () => {
   applyCsp();
   installPrefsBridge();
+  installProjectsBridge();
   installWindowControlBridge();
-  await installAgentBridge();
+  installAgentBridge();
 
   createWindow();
   app.on('activate', () => {
@@ -167,7 +170,7 @@ app.on('window-all-closed', () => {
 });
 
 app.on('before-quit', () => {
-  void disposeAgentBridge();
+  void disposeAgentBridge().finally(() => closeDb());
 });
 
 // Defence-in-depth: refuse any unexpected webContents permission request.

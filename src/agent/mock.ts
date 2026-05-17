@@ -14,8 +14,10 @@ import type {
   AgentBackend,
   AgentEvent,
   AgentEventListener,
+  AgentImageContent,
   AgentMessage,
   AgentState,
+  ModelInfo,
   PromptOptions,
   ThinkingLevel,
   ToolCallSummary,
@@ -124,8 +126,7 @@ function buildScript(
         id: ctx.messageId,
         role: 'assistant',
         time: nowHHMM(),
-        text: '',
-        toolCalls: [],
+        parts: [],
       },
     }),
   });
@@ -223,6 +224,10 @@ export class MockBackend implements AgentBackend {
     thinkingLevel: 'medium',
     tokensUsed: 0,
     tokensMax: 200_000,
+    tokenUsage: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, total: 0 },
+    costUsd: 0,
+    contextPercent: 0,
+    autoCompactionEnabled: true,
     sessionId: `mock-${Date.now()}`,
   };
   private currentTimer: ReturnType<typeof setTimeout> | null = null;
@@ -256,7 +261,7 @@ export class MockBackend implements AgentBackend {
     this.emit({ type: 'state_changed', state: this.state });
   }
 
-  async prompt(text: string, _options?: PromptOptions): Promise<void> {
+  async prompt(text: string, options?: PromptOptions): Promise<void> {
     if (this.currentAbort) {
       // A prompt() while running becomes an implicit steer (matches SDK semantics).
       return this.steer(text);
@@ -265,12 +270,16 @@ export class MockBackend implements AgentBackend {
     // Record the user message in our history but do not echo it back via
     // message_start — the renderer is authoritative for user messages it
     // composed itself; broadcasting would cause a duplicate render.
+    const userParts: AgentMessage['parts'] = [];
+    if (text.trim().length > 0) userParts.push({ kind: 'text', text });
+    for (const image of options?.images ?? []) {
+      userParts.push({ kind: 'image', image: { ...image } });
+    }
     const userMessage: AgentMessage = {
       id: `u-${Date.now()}`,
       role: 'user',
       time: nowHHMM(),
-      text,
-      toolCalls: [],
+      parts: userParts,
     };
     this.messages.push(userMessage);
 
@@ -342,25 +351,33 @@ export class MockBackend implements AgentBackend {
     switch (event.type) {
       case 'message_start':
         if (event.message.role !== 'user') {
-          this.messages.push({ ...event.message, toolCalls: [...event.message.toolCalls] });
+          this.messages.push({ ...event.message, parts: [...event.message.parts] });
         }
         return;
-      case 'text_delta': {
+      case 'text_delta':
+      case 'thinking_delta': {
         const msg = this.messages.find((m) => m.id === event.messageId);
-        if (msg) msg.text += event.delta;
+        if (!msg) return;
+        const kind = event.type === 'text_delta' ? 'text' : 'thinking';
+        const last = msg.parts[msg.parts.length - 1];
+        if (last && last.kind === kind) last.text += event.delta;
+        else msg.parts.push({ kind, text: event.delta });
         return;
       }
       case 'tool_execution_start': {
         const msg = this.messages.find((m) => m.id === event.messageId);
-        if (msg) msg.toolCalls.push({ ...event.tool });
+        if (msg) msg.parts.push({ kind: 'tool', tool: { ...event.tool } });
         return;
       }
       case 'tool_execution_update':
       case 'tool_execution_end': {
         const msg = this.messages.find((m) => m.id === event.messageId);
         if (!msg) return;
-        const tool = msg.toolCalls.find((t) => t.toolCallId === event.toolCallId);
-        if (tool) Object.assign(tool, event.patch);
+        for (const p of msg.parts) {
+          if (p.kind === 'tool' && p.tool.toolCallId === event.toolCallId) {
+            Object.assign(p.tool, event.patch);
+          }
+        }
         return;
       }
       default:
@@ -368,15 +385,15 @@ export class MockBackend implements AgentBackend {
     }
   }
 
-  async steer(text: string): Promise<void> {
+  async steer(text: string, _images?: AgentImageContent[]): Promise<void> {
     // For the mock, a steer is just an inline user message + cancel + restart
     // would be heavy; treat it as a queued follow-up event for observability.
     this.emit({ type: 'agent_start' }); // no-op signal so listeners can react
     this.emit({ type: 'error', message: `mock backend: steer queued — "${text.slice(0, 60)}"` });
   }
 
-  async followUp(text: string): Promise<void> {
-    return this.steer(text);
+  async followUp(text: string, images?: AgentImageContent[]): Promise<void> {
+    return this.steer(text, images);
   }
 
   async abort(): Promise<void> {
@@ -403,7 +420,40 @@ export class MockBackend implements AgentBackend {
   }
 
   async getMessages(): Promise<AgentMessage[]> {
-    return this.messages.map((m) => ({ ...m, toolCalls: [...m.toolCalls] }));
+    return this.messages.map((m) => ({
+      ...m,
+      parts: m.parts.map((p) => {
+        if (p.kind === 'tool') return { kind: 'tool', tool: { ...p.tool } };
+        if (p.kind === 'image') return { kind: 'image', image: { ...p.image } };
+        return { ...p };
+      }),
+    }));
+  }
+
+  async getSessionFile(): Promise<string | null> {
+    // The mock has no on-disk session.
+    return null;
+  }
+
+  async getAvailableModels(): Promise<ModelInfo[]> {
+    return [
+      {
+        provider: 'mock',
+        id: 'mock-sonnet',
+        name: 'Mock Sonnet',
+        reasoning: true,
+        input: ['text', 'image'],
+        contextWindow: 200_000,
+      },
+      {
+        provider: 'mock',
+        id: 'mock-haiku',
+        name: 'Mock Haiku',
+        reasoning: false,
+        input: ['text'],
+        contextWindow: 200_000,
+      },
+    ];
   }
 
   async setModel(provider: string, modelId: string): Promise<void> {

@@ -15,20 +15,29 @@
     "typecheck": "npm run typecheck:node && npm run typecheck:web",
     "test": "vitest run",
     "test:watch": "vitest",
-    "test:e2e": "playwright test"
+    "test:e2e": "playwright test",
+    "rebuild": "node scripts/electron-rebuild.mjs",
+    "postinstall": "node scripts/electron-rebuild.mjs"
   },
   "dependencies": {
     "@earendil-works/pi-coding-agent": "^0.74.0",
     "@radix-ui/react-dialog": "^1.1.6",
     "@radix-ui/react-popover": "^1.1.6",
+    "better-sqlite3": "^11.10.0",
     "electron-store": "8.2.0",
+    "highlight.js": "^11.11.1",
     "lucide-react": "^0.469.0",
     "react": "^18.3.1",
     "react-dom": "^18.3.1",
+    "react-markdown": "^9.1.0",
+    "rehype-highlight": "^7.0.2",
+    "remark-gfm": "^4.0.1",
     "zustand": "^5.0.2"
   },
   "devDependencies": {
+    "@electron/rebuild": "^3.7.2",
     "@playwright/test": "^1.49.1",
+    "@types/better-sqlite3": "^7.6.13",
     "@types/node": "^22.10.5",
     "@types/react": "^18.3.18",
     "@types/react-dom": "^18.3.5",

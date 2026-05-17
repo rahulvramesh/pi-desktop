@@ -20,16 +20,16 @@
   flex: 1;
   min-height: 0;
   display: grid;
-  grid-template-columns: 260px 1fr;
+  grid-template-columns: 260px minmax(0, 1fr);
 }
 .bodyNoSidebar {
-  grid-template-columns: 0 1fr;
+  grid-template-columns: minmax(0, 1fr);
 }
 .bodyWithRight {
-  grid-template-columns: 260px 1fr 360px;
+  grid-template-columns: 260px minmax(0, 1fr) 360px;
 }
 .bodyNoSidebar.bodyWithRight {
-  grid-template-columns: 0 1fr 360px;
+  grid-template-columns: minmax(0, 1fr) 360px;
 }
 
 .bootShell {

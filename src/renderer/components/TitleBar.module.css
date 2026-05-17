@@ -10,6 +10,13 @@
   -webkit-app-region: drag;
   user-select: none;
 }
+/* Windows: native frame is off; right-aligned controls hug the edge with no
+   gutter, so eat the right padding here and let the right column grow to
+   fit both the toolbar buttons and the window controls. */
+:global([data-platform='win32']) .titlebar {
+  padding-right: 0;
+  grid-template-columns: 240px 1fr auto;
+}
 
 .left,
 .center,
@@ -53,6 +60,11 @@
 }
 :global([data-platform='darwin']) .titlebar {
   padding-left: 80px;
+}
+/* Windows uses its own right-side controls (see .winControls); the colored
+   macOS-style dots are hidden there. */
+:global([data-platform='win32']) .trafficLights {
+  display: none;
 }
 
 .tl {
@@ -139,4 +151,45 @@
 .pillSlot {
   margin-left: 6px;
   display: inline-flex;
+}
+
+/* Windows-style window controls (right-aligned). Shown only on Windows; the
+   buttons stretch the full title-bar height to match Win11 conventions. */
+.winControls {
+  display: none;
+  align-items: stretch;
+  margin-left: 6px;
+  height: 38px;
+  -webkit-app-region: no-drag;
+}
+:global([data-platform='win32']) .winControls {
+  display: inline-flex;
+}
+
+.winBtn {
+  appearance: none;
+  border: 0;
+  background: transparent;
+  width: 46px;
+  height: 38px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--ink-2);
+  cursor: pointer;
+  transition: background 0.12s, color 0.12s;
+  padding: 0;
+  font: inherit;
+}
+.winBtn:hover {
+  background: color-mix(in srgb, var(--ink) 8%, transparent);
+  color: var(--ink);
+}
+.winBtnClose:hover {
+  background: #e81123;
+  color: white;
+}
+.winBtn:focus-visible {
+  outline: 1px solid var(--accent);
+  outline-offset: -3px;
 }

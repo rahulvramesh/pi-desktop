@@ -1,0 +1,71 @@
+/*
+ * highlight.js token theme, mapped onto the app's design tokens so it adapts
+ * to light/dark automatically (tokens flip via [data-theme]). highlight.js
+ * emits global `.hljs-*` class names, so this is a global stylesheet (imported
+ * in main.tsx) rather than a CSS module. Used by rehype-highlight in Markdown
+ * and by the CodeBlock used in tool-call previews.
+ */
+
+.hljs {
+  color: var(--ink-2);
+  background: transparent;
+}
+
+.hljs-comment,
+.hljs-quote {
+  color: var(--ink-4);
+  font-style: italic;
+}
+
+.hljs-keyword,
+.hljs-selector-tag,
+.hljs-literal,
+.hljs-section,
+.hljs-doctag,
+.hljs-name {
+  color: var(--accent);
+}
+
+.hljs-string,
+.hljs-meta-string,
+.hljs-regexp,
+.hljs-addition {
+  color: var(--add);
+}
+
+.hljs-number,
+.hljs-symbol,
+.hljs-bullet,
+.hljs-link,
+.hljs-attr,
+.hljs-template-variable,
+.hljs-variable {
+  color: var(--accent-2);
+}
+
+.hljs-title,
+.hljs-title.function_,
+.hljs-title.class_,
+.hljs-built_in,
+.hljs-type,
+.hljs-attribute {
+  color: var(--ink);
+}
+
+.hljs-meta,
+.hljs-selector-class,
+.hljs-selector-id,
+.hljs-tag {
+  color: var(--ink-3);
+}
+
+.hljs-deletion {
+  color: var(--del);
+}
+
+.hljs-emphasis {
+  font-style: italic;
+}
+.hljs-strong {
+  font-weight: 600;
+}

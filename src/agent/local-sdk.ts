@@ -23,11 +23,15 @@ import type {
   AgentBackend,
   AgentEvent,
   AgentEventListener,
+  AgentImageContent,
   AgentMessage,
   AgentRunState,
   AgentState,
+  ModelInfo,
+  ModelInputKind,
   PromptOptions,
   ThinkingLevel,
+  TokenUsageSummary,
   ToolCallSummary,
 } from './backend.js';
 
@@ -41,9 +45,18 @@ export interface LocalSdkBackendOptions {
 const DEFAULT_PROVIDER = 'anthropic' as const;
 const DEFAULT_MODEL_ID = 'claude-sonnet-4-6' as const;
 
-/** SDK ThinkingLevel includes "minimal" / "xhigh"; ours is the narrower v1 set. */
 function toSdkThinkingLevel(level: ThinkingLevel): 'off' | 'low' | 'medium' | 'high' {
-  return level;
+  switch (level) {
+    case 'off':
+    case 'low':
+    case 'medium':
+    case 'high':
+      return level;
+    case 'minimal':
+      return 'low';
+    case 'xhigh':
+      return 'high';
+  }
 }
 
 function nowHHMM(): string {
@@ -91,6 +104,27 @@ function extractToolPreview(result: unknown): string | undefined {
 
 function truncate(text: string, max = 4_000): string {
   return text.length <= max ? text : `${text.slice(0, max)}\n... (${text.length - max} more chars)`;
+}
+
+function isModelInputKind(value: unknown): value is ModelInputKind {
+  return value === 'text' || value === 'image';
+}
+
+function stripImageMetadata(images: AgentImageContent[]): AgentImageContent[] {
+  return images.map((image) => ({ type: 'image', data: image.data, mimeType: image.mimeType }));
+}
+
+const EMPTY_USAGE: TokenUsageSummary = { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, total: 0 };
+
+interface MinimalSessionStats {
+  tokens?: TokenUsageSummary;
+  cost?: number;
+  contextUsage?: { tokens: number | null; contextWindow: number; percent: number | null };
+}
+
+function sessionStats(session: AgentSession | null): MinimalSessionStats | undefined {
+  const candidate = session as (AgentSession & { getSessionStats?: () => MinimalSessionStats }) | null;
+  return candidate?.getSessionStats?.();
 }
 
 export class LocalSdkBackend implements AgentBackend {
@@ -171,6 +205,13 @@ export class LocalSdkBackend implements AgentBackend {
         this.currentAssistantMessageId = null;
         this.accumulatedText = '';
         return;
+      case 'queue_update':
+        this.emit({
+          type: 'queue_update',
+          steering: [...event.steering],
+          followUp: [...event.followUp],
+        });
+        return;
       case 'message_start': {
         const m = event.message;
         if (m.role !== 'assistant') return;
@@ -183,8 +224,7 @@ export class LocalSdkBackend implements AgentBackend {
             id,
             role: 'assistant',
             time: nowHHMM(),
-            text: '',
-            toolCalls: [],
+            parts: [],
           },
         });
         return;
@@ -197,6 +237,12 @@ export class LocalSdkBackend implements AgentBackend {
           this.accumulatedText += inner.delta;
           this.setRunState('running');
           this.emit({ type: 'text_delta', messageId, delta: inner.delta });
+        } else if ((inner as { type?: string }).type === 'thinking_delta') {
+          const delta = (inner as { delta?: unknown }).delta;
+          if (typeof delta === 'string') {
+            this.setRunState('thinking');
+            this.emit({ type: 'thinking_delta', messageId, delta });
+          }
         }
         return;
       }
@@ -272,6 +318,7 @@ export class LocalSdkBackend implements AgentBackend {
     }
     try {
       await this.session.prompt(text, {
+        ...(options?.images?.length ? { images: stripImageMetadata(options.images) } : {}),
         ...(options?.streamingBehavior ? { streamingBehavior: options.streamingBehavior } : {}),
       });
     } catch (err) {
@@ -281,21 +328,21 @@ export class LocalSdkBackend implements AgentBackend {
     }
   }
 
-  async steer(text: string): Promise<void> {
+  async steer(text: string, images?: AgentImageContent[]): Promise<void> {
     await this.sessionInit;
     if (!this.session) return;
     try {
-      await this.session.steer(text);
+      await this.session.steer(text, images?.length ? stripImageMetadata(images) : undefined);
     } catch (err) {
       this.emit({ type: 'error', message: redact(err instanceof Error ? err.message : String(err)) });
     }
   }
 
-  async followUp(text: string): Promise<void> {
+  async followUp(text: string, images?: AgentImageContent[]): Promise<void> {
     await this.sessionInit;
     if (!this.session) return;
     try {
-      await this.session.followUp(text);
+      await this.session.followUp(text, images?.length ? stripImageMetadata(images) : undefined);
     } catch (err) {
       this.emit({ type: 'error', message: redact(err instanceof Error ? err.message : String(err)) });
     }
@@ -311,13 +358,21 @@ export class LocalSdkBackend implements AgentBackend {
   async getState(): Promise<AgentState> {
     await this.sessionInit;
     const model = this.session?.state.model;
+    const stats = sessionStats(this.session);
+    const tokenUsage = stats?.tokens ?? EMPTY_USAGE;
+    const contextWindow = stats?.contextUsage?.contextWindow ?? model?.contextWindow ?? 200_000;
+    const contextTokens = stats?.contextUsage?.tokens;
     return {
       runState: this.runState,
       modelProvider: model?.provider ?? this.modelProvider,
       modelId: model?.id ?? this.modelId,
       thinkingLevel: this.thinkingLevel,
-      tokensUsed: 0,
-      tokensMax: model?.contextWindow ?? 200_000,
+      tokensUsed: typeof contextTokens === 'number' ? contextTokens : tokenUsage.total,
+      tokensMax: contextWindow,
+      tokenUsage,
+      costUsd: stats?.cost ?? 0,
+      contextPercent: stats?.contextUsage ? stats.contextUsage.percent : 0,
+      autoCompactionEnabled: this.session?.autoCompactionEnabled ?? true,
       sessionId: this.session?.sessionId ?? 'unset',
       errorMessage: this.session?.state.errorMessage,
     };
@@ -329,6 +384,37 @@ export class LocalSdkBackend implements AgentBackend {
     // never calls this on the SDK backend in the P3 flow. A later phase that
     // adds resume-on-reload should map SDK messages → our flat shape here.
     return [];
+  }
+
+  async getSessionFile(): Promise<string | null> {
+    await this.sessionInit;
+    return this.session?.sessionFile ?? null;
+  }
+
+  async getAvailableModels(): Promise<ModelInfo[]> {
+    await this.sessionInit;
+    const model = this.session?.state.model as
+      | {
+          provider?: string;
+          id?: string;
+          name?: string;
+          reasoning?: boolean;
+          input?: unknown[];
+          contextWindow?: number;
+        }
+      | undefined;
+    const id = model?.id ?? this.modelId;
+    const provider = model?.provider ?? this.modelProvider;
+    return [
+      {
+        provider,
+        id,
+        name: model?.name ?? id,
+        reasoning: model?.reasoning ?? true,
+        input: Array.isArray(model?.input) ? model.input.filter(isModelInputKind) : ['text', 'image'],
+        contextWindow: model?.contextWindow ?? 200_000,
+      },
+    ];
   }
 
   async setModel(provider: string, modelId: string): Promise<void> {

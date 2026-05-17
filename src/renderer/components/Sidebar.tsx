@@ -1,228 +1,271 @@
-import { useState } from 'react';
+import { useEffect } from 'react';
 import {
   ChevronRight,
-  FileCode2,
+  Clock,
+  FolderPlus,
   Folder,
-  FolderOpen,
-  GitBranch,
-  History,
-  Package,
-  Plus,
+  LayoutGrid,
   Search,
   Settings,
-  Sparkles,
+  Box,
+  SquarePen,
+  Trash2,
 } from 'lucide-react';
-import { FILE_TREE, type FileNode } from '../data/file-tree.js';
-import { PiGlyph } from './PiGlyph.js';
+import type { Chat } from '../../shared/ipc.js';
+import { useAgentStore } from '../stores/agent.js';
+import { useProjectsStore } from '../stores/projects.js';
+import { useUiStore } from '../stores/ui.js';
+import { SoftCells } from './SoftCells.js';
 import styles from './Sidebar.module.css';
 
-type Tab = 'files' | 'sessions' | 'skills' | 'packages';
+type NavId = 'new' | 'search' | 'skills' | 'plugins' | 'automations';
 
-const TABS: Array<{ id: Tab; label: string; icon: typeof FileCode2 }> = [
-  { id: 'files', label: 'Files', icon: FileCode2 },
-  { id: 'sessions', label: 'Sessions', icon: History },
-  { id: 'skills', label: 'Skills', icon: Sparkles },
-  { id: 'packages', label: 'Packages', icon: Package },
+const NAV: Array<{ id: NavId; label: string; icon: typeof Search; disabled?: boolean }> = [
+  { id: 'new', label: 'New chat', icon: SquarePen },
+  { id: 'search', label: 'Search', icon: Search },
+  { id: 'skills', label: 'Skills', icon: Box },
+  { id: 'plugins', label: 'Plugins', icon: LayoutGrid, disabled: true },
+  { id: 'automations', label: 'Automations', icon: Clock },
 ];
 
-function TreeNode({
-  node,
-  depth,
-  expanded,
-  toggle,
-  selectedPath,
-  select,
-}: {
-  node: FileNode;
-  depth: number;
-  expanded: Set<string>;
-  toggle: (path: string) => void;
-  selectedPath: string;
-  select: (path: string) => void;
-}) {
-  const indent = 8 + depth * 12;
-  if (node.type === 'dir') {
-    const isOpen = expanded.has(node.path);
-    return (
-      <>
-        <div
-          className={styles.row}
-          style={{ paddingLeft: indent }}
-          onClick={() => toggle(node.path)}
-          role="button"
-          tabIndex={0}
-        >
-          <ChevronRight
-            size={12}
-            className={`${styles.chev} ${isOpen ? styles.chevOpen : ''}`}
-          />
-          {isOpen ? (
-            <FolderOpen size={14} className={styles.iconAccent} />
-          ) : (
-            <Folder size={14} className={styles.iconAccent} />
-          )}
-          <span>{node.name}</span>
-        </div>
-        {isOpen &&
-          node.children?.map((c) => (
-            <TreeNode
-              key={c.path}
-              node={c}
-              depth={depth + 1}
-              expanded={expanded}
-              toggle={toggle}
-              selectedPath={selectedPath}
-              select={select}
-            />
-          ))}
-      </>
-    );
-  }
-
-  const isSelected = node.path === selectedPath;
-  const cls = [
-    styles.row,
-    isSelected ? styles.selected : '',
-    node.status === 'dirty' ? styles.dirty : '',
-    node.status === 'added' ? styles.added : '',
-  ]
-    .filter(Boolean)
-    .join(' ');
-
-  return (
-    <div
-      className={cls}
-      style={{ paddingLeft: indent }}
-      onClick={() => select(node.path)}
-      role="button"
-      tabIndex={0}
-    >
-      <span className={styles.chevSpace} />
-      <FileCode2 size={14} className={styles.iconMuted} />
-      <span>{node.name}</span>
-      {node.status === 'dirty' && <span className={styles.badgeDirty}>M</span>}
-      {node.status === 'added' && <span className={styles.badgeAdded}>A</span>}
-    </div>
-  );
+function relativeAge(ms: number): string {
+  const s = Math.max(0, Math.floor((Date.now() - ms) / 1000));
+  if (s < 60) return 'now';
+  const m = Math.floor(s / 60);
+  if (m < 60) return `${m}m`;
+  const h = Math.floor(m / 60);
+  if (h < 24) return `${h}h`;
+  const d = Math.floor(h / 24);
+  if (d < 7) return `${d}d`;
+  const w = Math.floor(d / 7);
+  return w < 52 ? `${w}w` : `${Math.floor(d / 365)}y`;
 }
 
-function StubBody({ label }: { label: string }) {
+function ChatRow({
+  chat,
+  indented,
+  selected,
+  running,
+  onOpen,
+  onDelete,
+}: {
+  chat: Chat;
+  indented?: boolean;
+  selected: boolean;
+  running?: boolean;
+  onOpen: () => void;
+  onDelete?: () => void;
+}) {
   return (
-    <div className={styles.stub}>
-      <span>{label} — stubbed in P1–P3</span>
+    <div
+      className={`${styles.chatRow} ${indented ? styles.chatIndent : ''} ${
+        selected ? styles.selected : ''
+      }`}
+      role="button"
+      tabIndex={0}
+      onClick={onOpen}
+      title={chat.title}
+    >
+      <span className={styles.chatTitle}>{chat.title}</span>
+      {running ? (
+        <span className={styles.runIndicator} aria-label="running" title="running">
+          <SoftCells cell={1} gap={0} />
+        </span>
+      ) : (
+        <span className={styles.age}>{relativeAge(chat.updatedAt)}</span>
+      )}
+      {onDelete && (
+        <button
+          className={styles.rowAction}
+          title="Delete chat"
+          aria-label="Delete chat"
+          type="button"
+          onClick={(e) => {
+            e.stopPropagation();
+            onDelete();
+          }}
+        >
+          <Trash2 size={12} />
+        </button>
+      )}
     </div>
   );
 }
 
 /**
- * Sidebar with four tabs. Only Files is wired against the hardcoded tree; the
- * other three render a flat "stubbed" message until later phases.
+ * Sidebar — real, SQLite-backed chat-history navigator. Projects are folders
+ * the user added; chats are pi conversations grouped under their project. The
+ * file tree lives in the right Inspector pane (Files tab).
  */
 export function Sidebar() {
-  const [tab, setTab] = useState<Tab>('files');
-  const [expanded, setExpanded] = useState<Set<string>>(
-    new Set(['.pi', '.pi/skills', 'src', 'src/levels', 'src/engine', 'tests']),
-  );
-  const [selected, setSelected] = useState('src/levels/Loader.ts');
+  const setView = useUiStore((s) => s.setView);
+  const runState = useAgentStore((s) => s.runState);
+  const {
+    projects,
+    chatsByProject,
+    expanded,
+    activeChatId,
+    hydrate,
+    addProject,
+    removeProject,
+    toggleProject,
+    newChat,
+    openChat,
+    deleteChat,
+  } = useProjectsStore();
+  const isActiveRunning = (id: string) => id === activeChatId && runState !== 'idle';
 
-  const toggle = (p: string) => {
-    setExpanded((prev) => {
-      const next = new Set(prev);
-      if (next.has(p)) next.delete(p);
-      else next.add(p);
-      return next;
-    });
+  useEffect(() => {
+    void hydrate();
+  }, [hydrate]);
+
+  const onNav = (id: NavId) => {
+    if (id !== 'new') return; // search / skills / plugins / automations are stubs
+    const target = projects[0];
+    if (!target) {
+      void addProject();
+      return;
+    }
+    void newChat(target.id);
   };
+
+  // Recent chats across all projects, newest first.
+  const recent = Object.values(chatsByProject)
+    .flat()
+    .sort((a, b) => b.updatedAt - a.updatedAt)
+    .slice(0, 8);
 
   return (
     <aside className={styles.sidebar}>
-      <div className={styles.project}>
-        <PiGlyph size={22} />
-        <div className={styles.projectMeta}>
-          <span className={styles.projectName}>openclaw</span>
-          <span className={styles.projectBranch}>
-            <GitBranch size={10} /> feat/level-loader-v2
-          </span>
-        </div>
-        <button className={styles.iconBtn} title="New session" aria-label="New session">
-          <Plus size={14} />
-        </button>
-      </div>
-
-      <div className={styles.tabs}>
-        {TABS.map((t) => {
-          const Icon = t.icon;
+      <nav className={styles.nav}>
+        {NAV.map((n) => {
+          const Icon = n.icon;
           return (
             <button
-              key={t.id}
-              className={`${styles.tab} ${tab === t.id ? styles.tabActive : ''}`}
-              onClick={() => setTab(t.id)}
+              key={n.id}
+              type="button"
+              className={`${styles.navItem} ${n.disabled ? styles.navDisabled : ''}`}
+              onClick={() => !n.disabled && onNav(n.id)}
+              disabled={n.disabled}
             >
-              <Icon size={13} />
-              <span>{t.label}</span>
+              <Icon size={15} className={styles.navIcon} />
+              <span>{n.label}</span>
             </button>
           );
         })}
-      </div>
-
-      <div className={styles.search}>
-        <Search size={13} className={styles.iconMuted} />
-        <input placeholder={tab === 'files' ? 'Find file…' : 'Search…'} />
-      </div>
+      </nav>
 
       <div className={styles.body}>
-        {tab === 'files' && (
-          <>
-            <div className={styles.section}>
-              <span>Workspace</span>
+        <div className={styles.section}>
+          <span>Projects</span>
+          <button
+            className={styles.rowAction}
+            title="Add project folder"
+            aria-label="Add project folder"
+            type="button"
+            onClick={() => void addProject()}
+          >
+            <FolderPlus size={14} />
+          </button>
+        </div>
+
+        {projects.length === 0 && (
+          <div className={`${styles.chatRow} ${styles.empty}`}>No projects — add a folder</div>
+        )}
+
+        {projects.map((p) => {
+          const open = expanded.has(p.id);
+          const chats = chatsByProject[p.id] ?? [];
+          return (
+            <div key={p.id}>
+              <div
+                className={styles.projectRow}
+                role="button"
+                tabIndex={0}
+                onClick={() => void toggleProject(p.id)}
+                title={p.path}
+              >
+                <ChevronRight
+                  size={12}
+                  className={`${styles.chev} ${open ? styles.chevOpen : ''}`}
+                />
+                <Folder size={14} className={styles.projectIcon} />
+                <span className={styles.projectName}>{p.name}</span>
+                <button
+                  className={styles.rowAction}
+                  title="New chat in this project"
+                  aria-label="New chat in this project"
+                  type="button"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    void newChat(p.id);
+                  }}
+                >
+                  <SquarePen size={12} />
+                </button>
+                <button
+                  className={styles.rowAction}
+                  title="Remove project"
+                  aria-label="Remove project"
+                  type="button"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    void removeProject(p.id);
+                  }}
+                >
+                  <Trash2 size={12} />
+                </button>
+              </div>
+
+              {open &&
+                (chats.length === 0 ? (
+                  <div className={`${styles.chatRow} ${styles.chatIndent} ${styles.empty}`}>
+                    No chats
+                  </div>
+                ) : (
+                  chats.map((c) => (
+                    <ChatRow
+                      key={c.id}
+                      chat={c}
+                      indented
+                      selected={c.id === activeChatId}
+                      running={isActiveRunning(c.id)}
+                      onOpen={() => void openChat(c.id)}
+                      onDelete={() => void deleteChat(c.id)}
+                    />
+                  ))
+                ))}
             </div>
-            {FILE_TREE.map((n) => (
-              <TreeNode
-                key={n.path}
-                node={n}
-                depth={0}
-                expanded={expanded}
-                toggle={toggle}
-                selectedPath={selected}
-                select={setSelected}
+          );
+        })}
+
+        {recent.length > 0 && (
+          <>
+            <div className={styles.section} style={{ marginTop: 10 }}>
+              <span>Chats</span>
+            </div>
+            {recent.map((c) => (
+              <ChatRow
+                key={`recent-${c.id}`}
+                chat={c}
+                selected={c.id === activeChatId}
+                running={isActiveRunning(c.id)}
+                onOpen={() => void openChat(c.id)}
               />
             ))}
-            <div className={styles.section} style={{ marginTop: 14 }}>
-              <span>Changes — 3</span>
-            </div>
-            <div className={`${styles.row} ${styles.added}`}>
-              <span className={styles.chevSpace} />
-              <FileCode2 size={14} className={styles.iconMuted} />
-              <span>src/levels/schema.ts</span>
-              <span className={styles.badgeAdded}>A</span>
-            </div>
-            <div className={`${styles.row} ${styles.dirty}`}>
-              <span className={styles.chevSpace} />
-              <FileCode2 size={14} className={styles.iconMuted} />
-              <span>src/levels/Loader.ts</span>
-              <span className={styles.badgeDirty}>M</span>
-            </div>
-            <div className={`${styles.row} ${styles.dirty}`}>
-              <span className={styles.chevSpace} />
-              <FileCode2 size={14} className={styles.iconMuted} />
-              <span>tests/loader.test.ts</span>
-              <span className={styles.badgeDirty}>M</span>
-            </div>
           </>
         )}
-        {tab === 'sessions' && <StubBody label="Sessions" />}
-        {tab === 'skills' && <StubBody label="Skills" />}
-        {tab === 'packages' && <StubBody label="Packages" />}
       </div>
 
       <div className={styles.footer}>
-        <div className={styles.avatar}>MA</div>
-        <div className={styles.userMeta}>
-          <span className={styles.userName}>M. Adler</span>
-          <span className={styles.userTier}>Pro · 1.4M tokens left</span>
-        </div>
-        <button className={styles.iconBtn} title="Settings" aria-label="Settings">
+        <button
+          className={styles.settingsBtn}
+          title="Settings"
+          type="button"
+          onClick={() => setView('settings')}
+        >
           <Settings size={14} />
+          <span>Settings</span>
         </button>
       </div>
     </aside>

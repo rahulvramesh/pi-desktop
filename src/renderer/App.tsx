@@ -6,6 +6,7 @@ import { Sidebar } from './components/Sidebar.js';
 import { StatusBar } from './components/StatusBar.js';
 import { TitleBar } from './components/TitleBar.js';
 import { TweaksPanel } from './components/TweaksPanel.js';
+import { Welcome } from './components/Welcome.js';
 import { useAgentStore } from './stores/agent.js';
 import { useUiStore } from './stores/ui.js';
 import styles from './App.module.css';
@@ -32,8 +33,12 @@ export function App() {
     return <div className={styles.bootShell} />;
   }
 
-  // The right inspector is chat-only — Settings owns its full content column.
+  // The right inspector is chat-only — Welcome and Settings own their full
+  // content column.
   const showRight = view === 'chat' && rightPane !== 'none';
+
+  const main =
+    view === 'settings' ? <Settings /> : view === 'welcome' ? <Welcome /> : <Chat />;
 
   return (
     <div className={styles.shell}>
@@ -45,7 +50,7 @@ export function App() {
           }`}
         >
           {sidebarVisible && <Sidebar />}
-          {view === 'settings' ? <Settings /> : <Chat />}
+          {main}
           {showRight && <InspectorPane />}
         </div>
         <StatusBar />

@@ -1,13 +1,13 @@
 /**
  * UI store — purely visual prefs, persisted via electron-store through IPC.
  * Mirrors the design's tweaks panel: theme, accent, density, sidebar, right
- * pane, and the developer-facing agent-state override.
+ * pane, dev mode, and the developer-facing agent-state override.
  */
 
 import { create } from 'zustand';
 import { PREFS_DEFAULTS, type PrefsShape } from '../../shared/ipc.js';
 
-export type View = 'chat' | 'settings';
+export type View = 'welcome' | 'chat' | 'settings';
 
 interface UiState extends PrefsShape {
   tweaksOpen: boolean;
@@ -22,6 +22,8 @@ interface UiState extends PrefsShape {
   toggleTweaks(): void;
   toggleSidebar(): void;
   setView(view: View): void;
+  /** Leave Welcome and persist that it has been seen. */
+  dismissWelcome(): void;
 }
 
 function applyTokensToRoot(prefs: PrefsShape): void {
@@ -45,11 +47,15 @@ export const useUiStore = create<UiState>((set, get) => ({
     try {
       const prefs = await window.pi.prefs.get();
       applyTokensToRoot(prefs);
-      set({ ...prefs, ready: true });
+      set({
+        ...prefs,
+        view: prefs.hasSeenWelcome ? 'chat' : 'welcome',
+        ready: true,
+      });
     } catch {
-      // First-run or sandboxed test: stay on defaults.
+      // First-run or sandboxed test: stay on defaults, which means Welcome.
       applyTokensToRoot(PREFS_DEFAULTS);
-      set({ ready: true });
+      set({ view: 'welcome', ready: true });
     }
   },
 
@@ -60,7 +66,9 @@ export const useUiStore = create<UiState>((set, get) => ({
       density: get().density,
       sidebarVisible: get().sidebarVisible,
       rightPane: get().rightPane,
+      devMode: get().devMode,
       agentStateOverride: get().agentStateOverride,
+      hasSeenWelcome: get().hasSeenWelcome,
       ...patch,
     };
     applyTokensToRoot(optimistic);
@@ -86,5 +94,9 @@ export const useUiStore = create<UiState>((set, get) => ({
   },
   setView(view) {
     set({ view });
+  },
+  dismissWelcome() {
+    set({ view: 'chat' });
+    if (!get().hasSeenWelcome) void get().patch({ hasSeenWelcome: true });
   },
 }));
