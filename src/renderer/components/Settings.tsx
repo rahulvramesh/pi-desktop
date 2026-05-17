@@ -92,6 +92,11 @@ export function Settings() {
   const density = useUiStore((s) => s.density);
   const devMode = useUiStore((s) => s.devMode);
   const rightPane = useUiStore((s) => s.rightPane);
+  const turnEndNotifyEnabled = useUiStore((s) => s.turnEndNotifyEnabled);
+  const turnEndNotifySound = useUiStore((s) => s.turnEndNotifySound);
+  const turnEndNotifyToast = useUiStore((s) => s.turnEndNotifyToast);
+  const turnEndNotifyAttention = useUiStore((s) => s.turnEndNotifyAttention);
+  const turnEndNotifyOnlyWhenUnfocused = useUiStore((s) => s.turnEndNotifyOnlyWhenUnfocused);
   const patch = useUiStore((s) => s.patch);
 
   // Local UI state for the bits not yet plumbed to a backend.
@@ -275,6 +280,71 @@ export function Settings() {
               {densityChip('regular')}
               {densityChip('comfy')}
             </div>
+          ),
+        },
+      ],
+    },
+    {
+      title: 'Notifications',
+      rows: [
+        {
+          lbl: 'Pi is ready',
+          help: 'Fire when the backend emits agent_end',
+          ctrl: (
+            <>
+              <Toggle
+                on={turnEndNotifyEnabled}
+                onChange={() => void patch({ turnEndNotifyEnabled: !turnEndNotifyEnabled })}
+                ariaLabel="Pi completion notifications"
+              />
+              <span className={styles.small}>
+                {turnEndNotifyEnabled ? 'Enabled' : 'Muted'}
+              </span>
+            </>
+          ),
+        },
+        {
+          lbl: 'Channels',
+          help: 'Sound, OS toast, and dock/taskbar attention',
+          ctrl: (
+            <>
+              <Toggle
+                on={turnEndNotifySound}
+                onChange={() => void patch({ turnEndNotifySound: !turnEndNotifySound })}
+                ariaLabel="Completion sound"
+              />
+              <span className={styles.small}>sound</span>
+              <Toggle
+                on={turnEndNotifyToast}
+                onChange={() => void patch({ turnEndNotifyToast: !turnEndNotifyToast })}
+                ariaLabel="Completion OS alert"
+              />
+              <span className={styles.small}>OS alert</span>
+              <Toggle
+                on={turnEndNotifyAttention}
+                onChange={() => void patch({ turnEndNotifyAttention: !turnEndNotifyAttention })}
+                ariaLabel="Completion attention cue"
+              />
+              <span className={styles.small}>attention</span>
+            </>
+          ),
+        },
+        {
+          lbl: 'Quiet when visible',
+          help: 'Skip if the finished chat is already focused',
+          ctrl: (
+            <>
+              <Toggle
+                on={turnEndNotifyOnlyWhenUnfocused}
+                onChange={() =>
+                  void patch({ turnEndNotifyOnlyWhenUnfocused: !turnEndNotifyOnlyWhenUnfocused })
+                }
+                ariaLabel="Only notify when Pi is not visible"
+              />
+              <span className={styles.small}>
+                {turnEndNotifyOnlyWhenUnfocused ? 'background / other chats only' : 'always notify'}
+              </span>
+            </>
           ),
         },
       ],

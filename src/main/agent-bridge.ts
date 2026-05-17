@@ -28,6 +28,7 @@ import type {
 import { createBackend, resolveBackendConfig } from '../agent/factory.js';
 import { IPC, type AppMeta, type Chat, type WireEvent } from '../shared/ipc.js';
 import { chatsRepo, projectsRepo } from './db.js';
+import { notifyTurnEnd } from './turn-end-notifier.js';
 
 const BATCH_INTERVAL_MS = 16;
 const RPC_LOG_LIMIT = 800;
@@ -45,6 +46,9 @@ interface ChatRuntime {
   unsubscribeRpcLogs: (() => void) | null;
   pendingBatches: Map<string, PendingBatch>;
   pendingThinking: Map<string, PendingBatch>;
+  runStartedAt: number | null;
+  suppressNextCompletionNotify: boolean;
+  lastNotificationAt: number | null;
 }
 
 const runtimes = new Map<string, ChatRuntime>();
@@ -127,6 +131,11 @@ function clearPending(runtime: ChatRuntime): void {
 }
 
 function dispatchEvent(runtime: ChatRuntime, event: AgentEvent): void {
+  if (event.type === 'agent_start') {
+    runtime.runStartedAt = Date.now();
+    runtime.suppressNextCompletionNotify = false;
+  }
+
   if (event.type === 'text_delta') {
     const messageId = event.messageId;
     let pending = runtime.pendingBatches.get(messageId);
@@ -168,10 +177,32 @@ function dispatchEvent(runtime: ChatRuntime, event: AgentEvent): void {
   // the chat can be resumed later, and bump its recency for sidebar ordering.
   if (event.type === 'agent_end') {
     const chatId = runtime.chatId;
+    const notificationRunStartedAt = runtime.runStartedAt;
+    const notificationSuppressed = runtime.suppressNextCompletionNotify;
+    const notificationLastShownAt = runtime.lastNotificationAt;
+    const isActiveChat = runtime.chatId === activeChatId;
+    const chatTitle = chatsRepo.get(chatId)?.title ?? null;
+    runtime.runStartedAt = null;
+    runtime.suppressNextCompletionNotify = false;
+
     void runtime.backend.getSessionFile().then((file) => {
       if (file) chatsRepo.setSessionFile(chatId, file);
       else chatsRepo.touch(chatId);
     });
+
+    void notifyTurnEnd({
+      chatTitle,
+      isActiveChat,
+      runStartedAt: notificationRunStartedAt,
+      suppressNextCompletionNotify: notificationSuppressed,
+      lastNotificationAt: notificationLastShownAt,
+    })
+      .then((result) => {
+        if (result.notifiedAt !== null) runtime.lastNotificationAt = result.notifiedAt;
+      })
+      .catch(() => {
+        // Native notifications are best-effort and should never break streaming.
+      });
   }
 }
 
@@ -229,6 +260,9 @@ async function openChat(chatId: string): Promise<Chat> {
     unsubscribeRpcLogs,
     pendingBatches: new Map(),
     pendingThinking: new Map(),
+    runStartedAt: null,
+    suppressNextCompletionNotify: false,
+    lastNotificationAt: null,
   };
   runtimes.set(chatId, runtime);
 
@@ -283,7 +317,9 @@ export function installAgentBridge(): void {
     await requireRuntime().backend.followUp(text, images);
   });
   ipcMain.handle(IPC.Abort, async () => {
-    await requireRuntime().backend.abort();
+    const runtime = requireRuntime();
+    runtime.suppressNextCompletionNotify = true;
+    await runtime.backend.abort();
   });
   ipcMain.handle(IPC.GetState, async () => activeRuntime()?.backend.getState() ?? EMPTY_STATE);
   ipcMain.handle(IPC.GetMessages, async () => activeRuntime()?.backend.getMessages() ?? []);

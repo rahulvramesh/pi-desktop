@@ -4,7 +4,7 @@ import { resolve } from 'node:path';
 export default defineConfig({
   test: {
     environment: 'node',
-    include: ['tests/agent/**/*.test.ts'],
+    include: ['tests/**/*.test.ts'],
     globals: false,
     reporters: ['default'],
   },

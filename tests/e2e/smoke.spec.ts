@@ -27,7 +27,7 @@ test.describe('Pi Desktop smoke (mock backend)', () => {
     // Seed a deterministic project/chat through the preload API. The app no
     // longer ships hardcoded sidebar data, so the smoke test owns its fixture.
     await win.evaluate(async (root) => {
-      await window.pi.prefs.set({ hasSeenWelcome: true });
+      await window.pi.prefs.set({ hasSeenWelcome: true, turnEndNotifyEnabled: false });
       const project = await window.pi.projects.add(root, 'Level loader v2');
       const chats = await window.pi.chats.list(project.id);
       const existing = chats.find((c) => c.title === 'Level loader v2');

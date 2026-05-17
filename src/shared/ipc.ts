@@ -98,6 +98,16 @@ export interface PrefsShape {
   agentStateOverride: 'idle' | 'thinking' | 'working' | 'auto';
   /** Flipped true the first time the user leaves the Welcome screen. */
   hasSeenWelcome: boolean;
+  /** Master switch for native completion notifications. */
+  turnEndNotifyEnabled: boolean;
+  /** Play the OS alert sound when Pi finishes a run. */
+  turnEndNotifySound: boolean;
+  /** Show a native OS notification when Pi finishes a run. */
+  turnEndNotifyToast: boolean;
+  /** Request dock/taskbar attention when Pi finishes a run. */
+  turnEndNotifyAttention: boolean;
+  /** Stay quiet when the completed chat is already focused and visible. */
+  turnEndNotifyOnlyWhenUnfocused: boolean;
 }
 
 export const PREFS_DEFAULTS: PrefsShape = {
@@ -109,6 +119,11 @@ export const PREFS_DEFAULTS: PrefsShape = {
   devMode: false,
   agentStateOverride: 'auto',
   hasSeenWelcome: false,
+  turnEndNotifyEnabled: true,
+  turnEndNotifySound: true,
+  turnEndNotifyToast: true,
+  turnEndNotifyAttention: true,
+  turnEndNotifyOnlyWhenUnfocused: true,
 };
 
 /**

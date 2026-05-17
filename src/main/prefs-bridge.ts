@@ -33,14 +33,16 @@ async function getStore() {
   return store;
 }
 
+export async function readPrefs(): Promise<PrefsShape> {
+  const s = await getStore();
+  return { ...PREFS_DEFAULTS, ...(s.store as PrefsShape) };
+}
+
 export function installPrefsBridge(): void {
-  ipcMain.handle(IPC.PrefsGet, async (): Promise<PrefsShape> => {
-    const s = await getStore();
-    return { ...PREFS_DEFAULTS, ...(s.store as PrefsShape) };
-  });
+  ipcMain.handle(IPC.PrefsGet, async (): Promise<PrefsShape> => readPrefs());
   ipcMain.handle(IPC.PrefsSet, async (_e, patch: Partial<PrefsShape>): Promise<PrefsShape> => {
     const s = await getStore();
-    const current = { ...PREFS_DEFAULTS, ...(s.store as PrefsShape) };
+    const current = await readPrefs();
     const next = { ...current, ...patch };
     s.set(next);
     return next;

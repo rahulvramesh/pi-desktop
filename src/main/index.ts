@@ -25,6 +25,9 @@ const __dirname = dirname(__filename);
 
 const isDev = !!process.env['ELECTRON_RENDERER_URL'];
 
+// Needed for reliable Windows toast routing in packaged builds.
+app.setAppUserModelId('works.earendil.pi-desktop');
+
 /**
  * Strict CSP. The renderer is allowed to load:
  *   - its own bundled assets (self)

@@ -69,6 +69,11 @@ export const useUiStore = create<UiState>((set, get) => ({
       devMode: get().devMode,
       agentStateOverride: get().agentStateOverride,
       hasSeenWelcome: get().hasSeenWelcome,
+      turnEndNotifyEnabled: get().turnEndNotifyEnabled,
+      turnEndNotifySound: get().turnEndNotifySound,
+      turnEndNotifyToast: get().turnEndNotifyToast,
+      turnEndNotifyAttention: get().turnEndNotifyAttention,
+      turnEndNotifyOnlyWhenUnfocused: get().turnEndNotifyOnlyWhenUnfocused,
       ...patch,
     };
     applyTokensToRoot(optimistic);
