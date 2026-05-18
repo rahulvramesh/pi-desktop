@@ -5,6 +5,7 @@
  */
 
 import { create } from 'zustand';
+import { piClient } from '../client/pi-client.js';
 import { PREFS_DEFAULTS, type PrefsShape } from '../../shared/ipc.js';
 
 export type View = 'welcome' | 'chat' | 'settings';
@@ -45,7 +46,7 @@ export const useUiStore = create<UiState>((set, get) => ({
 
   async hydrate() {
     try {
-      const prefs = await window.pi.prefs.get();
+      const prefs = await piClient.prefs.get();
       applyTokensToRoot(prefs);
       set({
         ...prefs,
@@ -79,7 +80,7 @@ export const useUiStore = create<UiState>((set, get) => ({
     applyTokensToRoot(optimistic);
     set(optimistic);
     try {
-      const next = await window.pi.prefs.set(patch);
+      const next = await piClient.prefs.set(patch);
       applyTokensToRoot(next);
       set(next);
     } catch {

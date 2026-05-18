@@ -236,4 +236,5 @@ export type AgentBackendConfig =
   | { kind: 'mock' }
   | { kind: 'sdk-local'; cwd: string }
   | { kind: 'rpc-local'; cwd: string }
-  | { kind: 'rpc-ssh'; host: string; cwd: string };
+  | { kind: 'rpc-ssh'; host: string; cwd: string }
+  | { kind: 'proxy'; chatId: string; projectId: string; cwd: string; title?: string };

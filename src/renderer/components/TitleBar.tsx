@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { piClient } from '../client/pi-client.js';
 import {
   Command,
   Minus,
@@ -42,7 +43,7 @@ export function TitleBar() {
   const [isMaximized, setIsMaximized] = useState(false);
 
   useEffect(() => {
-    return window.pi.window.onMaximizedChange(setIsMaximized);
+    return piClient.window.onMaximizedChange(setIsMaximized);
   }, []);
 
   return (
@@ -57,7 +58,7 @@ export function TitleBar() {
           <button
             type="button"
             className={`${styles.tl} ${styles.tlRed}`}
-            onClick={() => void window.pi.window.close()}
+            onClick={() => void piClient.window.close()}
             aria-label="Close window"
             title="Close"
           >
@@ -66,7 +67,7 @@ export function TitleBar() {
           <button
             type="button"
             className={`${styles.tl} ${styles.tlYellow}`}
-            onClick={() => void window.pi.window.minimize()}
+            onClick={() => void piClient.window.minimize()}
             aria-label="Minimize window"
             title="Minimize"
           >
@@ -75,7 +76,7 @@ export function TitleBar() {
           <button
             type="button"
             className={`${styles.tl} ${styles.tlGreen}`}
-            onClick={() => void window.pi.window.maximizeToggle()}
+            onClick={() => void piClient.window.maximizeToggle()}
             aria-label="Maximize window"
             title="Maximize"
           >
@@ -182,7 +183,7 @@ export function TitleBar() {
           <button
             type="button"
             className={styles.winBtn}
-            onClick={() => void window.pi.window.minimize()}
+            onClick={() => void piClient.window.minimize()}
             aria-label="Minimize window"
             title="Minimize"
           >
@@ -191,7 +192,7 @@ export function TitleBar() {
           <button
             type="button"
             className={styles.winBtn}
-            onClick={() => void window.pi.window.maximizeToggle()}
+            onClick={() => void piClient.window.maximizeToggle()}
             aria-label={isMaximized ? 'Restore window' : 'Maximize window'}
             title={isMaximized ? 'Restore' : 'Maximize'}
           >
@@ -207,7 +208,7 @@ export function TitleBar() {
           <button
             type="button"
             className={`${styles.winBtn} ${styles.winBtnClose}`}
-            onClick={() => void window.pi.window.close()}
+            onClick={() => void piClient.window.close()}
             aria-label="Close window"
             title="Close"
           >

@@ -10,9 +10,20 @@
  */
 
 import { MockBackend } from './mock.js';
+import { ensureRuntimeProxy } from './proxy-process.js';
 import type { AgentBackend, AgentBackendConfig } from './backend.js';
 
-export function resolveBackendConfig(env: NodeJS.ProcessEnv, cwd: string): AgentBackendConfig {
+export interface BackendRuntimeContext {
+  chatId: string;
+  projectId: string;
+  title?: string;
+}
+
+export function resolveBackendConfig(
+  env: NodeJS.ProcessEnv,
+  cwd: string,
+  context?: BackendRuntimeContext,
+): AgentBackendConfig {
   const kind = (env.PI_BACKEND ?? 'rpc-local').trim();
   switch (kind) {
     case 'mock':
@@ -28,6 +39,10 @@ export function resolveBackendConfig(env: NodeJS.ProcessEnv, cwd: string): Agent
       }
       return { kind: 'rpc-ssh', host, cwd };
     }
+    case 'proxy': {
+      if (!context) throw new Error('PI_BACKEND=proxy requires a chat runtime context');
+      return { kind: 'proxy', cwd, ...context };
+    }
     default:
       throw new Error(`Unknown PI_BACKEND value: ${kind}`);
   }
@@ -38,10 +53,17 @@ function piCommand(env: NodeJS.ProcessEnv): string {
   return env.PI_BIN?.trim() || 'pi';
 }
 
+function mockSpeed(env: NodeJS.ProcessEnv): number | undefined {
+  const raw = env.PI_MOCK_SPEED?.trim();
+  if (!raw) return undefined;
+  const parsed = Number(raw);
+  return Number.isFinite(parsed) && parsed > 0 ? parsed : undefined;
+}
+
 export async function createBackend(config: AgentBackendConfig): Promise<AgentBackend> {
   switch (config.kind) {
     case 'mock':
-      return new MockBackend();
+      return new MockBackend({ speed: mockSpeed(process.env) });
     case 'sdk-local': {
       const { LocalSdkBackend } = await import('./local-sdk.js');
       return new LocalSdkBackend({ cwd: config.cwd });
@@ -61,6 +83,19 @@ export async function createBackend(config: AgentBackendConfig): Promise<AgentBa
           args: [config.host, piCommand(process.env), '--mode', 'rpc'],
         },
         cwd: config.cwd,
+      });
+    }
+    case 'proxy': {
+      const [{ ProxyBackend }, connection] = await Promise.all([
+        import('./proxy.js'),
+        ensureRuntimeProxy(),
+      ]);
+      return new ProxyBackend({
+        ...connection,
+        chatId: config.chatId,
+        projectId: config.projectId,
+        cwd: config.cwd,
+        title: config.title,
       });
     }
   }

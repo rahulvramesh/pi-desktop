@@ -1,7 +1,7 @@
 /**
  * Agent store — chat messages + run state + tool cards.
  *
- * Subscribes to window.pi.subscribe on first read. Streamed text_delta events
+ * Subscribes to piClient.subscribe on first read. Streamed text_delta events
  * are appended directly to the matching assistant message; tool_execution_*
  * events mutate the per-message toolCalls array.
  *
@@ -11,6 +11,8 @@
  */
 
 import { create } from 'zustand';
+import { piClient } from '../client/pi-client.js';
+import type { AgentEventEnvelope } from '../../shared/ipc.js';
 import type {
   AgentEvent,
   AgentImageContent,
@@ -41,8 +43,14 @@ interface AgentStoreState {
   state: AgentState;
   /** Whether the agent is currently streaming a response. */
   runState: AgentRunState;
-  /** Ordered chat transcript. */
+  /** Active chat id, if one has been opened. */
+  activeChatId: string | null;
+  /** Ordered chat transcript for the active chat. */
   messages: DisplayMessage[];
+  /** Warm transcript cache keyed by chat id for background event updates. */
+  messagesByChat: Record<string, DisplayMessage[]>;
+  /** Warm state cache keyed by chat id for background event updates. */
+  stateByChat: Record<string, AgentState>;
   /** Non-fatal info/error banner; consumed by chat composer footer. */
   lastError: string | null;
   /** True once subscribe() has been wired. */
@@ -59,7 +67,7 @@ interface AgentStoreState {
   abort(): Promise<void>;
   clearError(): void;
   /** Replace the transcript with the active chat's history (after chat:open). */
-  loadActiveChat(): Promise<void>;
+  loadActiveChat(chatId?: string): Promise<void>;
   loadModels(): Promise<void>;
   setModel(provider: string, modelId: string): Promise<void>;
   setThinkingLevel(level: ThinkingLevel): Promise<void>;
@@ -213,10 +221,57 @@ function applyEvent(state: AgentStoreState, event: AgentEvent): Partial<AgentSto
   }
 }
 
+function stateWithRunState(state: AgentState, runState: AgentRunState): AgentState {
+  return state.runState === runState ? state : { ...state, runState };
+}
+
+function applyEnvelope(
+  store: AgentStoreState,
+  envelope: AgentEventEnvelope,
+): Partial<AgentStoreState> {
+  const active = store.activeChatId === envelope.chatId;
+  const currentMessages = active ? store.messages : store.messagesByChat[envelope.chatId] ?? [];
+  const currentState = active
+    ? store.state
+    : store.stateByChat[envelope.chatId] ?? { ...INITIAL_STATE };
+  const currentRunState = active ? store.runState : currentState.runState;
+
+  const scopedState: AgentStoreState = {
+    ...store,
+    messages: currentMessages,
+    state: currentState,
+    runState: currentRunState,
+  };
+  const patch = applyEvent(scopedState, envelope.event);
+  const changed = Object.keys(patch).length > 0;
+  if (!changed) return {};
+
+  const nextMessages = patch.messages ?? currentMessages;
+  const nextRunState = patch.runState ?? patch.state?.runState ?? currentRunState;
+  const nextAgentState = patch.state ?? stateWithRunState(currentState, nextRunState);
+
+  const next: Partial<AgentStoreState> = {
+    messagesByChat: { ...store.messagesByChat, [envelope.chatId]: nextMessages },
+    stateByChat: { ...store.stateByChat, [envelope.chatId]: nextAgentState },
+  };
+
+  if (active) {
+    next.messages = nextMessages;
+    next.state = nextAgentState;
+    next.runState = nextRunState;
+    if (patch.lastError !== undefined) next.lastError = patch.lastError;
+  }
+
+  return next;
+}
+
 export const useAgentStore = create<AgentStoreState>((set, get) => ({
   state: INITIAL_STATE,
   runState: 'idle',
+  activeChatId: null,
   messages: [],
+  messagesByChat: {},
+  stateByChat: {},
   lastError: null,
   subscribed: false,
   models: [],
@@ -224,33 +279,61 @@ export const useAgentStore = create<AgentStoreState>((set, get) => ({
   ensureSubscribed() {
     if (get().subscribed) return;
     set({ subscribed: true });
-    window.pi.subscribe((event) => {
-      set((s) => applyEvent(s, event));
+    piClient.subscribeAll((envelope) => {
+      set((s) => applyEnvelope(s, envelope));
     });
     // No active chat at startup — getState() rejects until one is opened.
     // loadActiveChat() pulls state + transcript once a chat is selected.
-    void window.pi.getState().then(
+    void piClient.getState().then(
       (state) => set({ state, runState: state.runState }),
       () => {},
     );
   },
 
-  async loadActiveChat() {
+  async loadActiveChat(chatId?: string) {
+    const targetChatId = chatId ?? get().activeChatId;
+    if (targetChatId) {
+      const cachedMessages = get().messagesByChat[targetChatId];
+      const cachedState = get().stateByChat[targetChatId];
+      set({
+        activeChatId: targetChatId,
+        ...(cachedMessages ? { messages: cachedMessages } : {}),
+        ...(cachedState ? { state: cachedState, runState: cachedState.runState } : {}),
+      });
+    }
+
     try {
       const [state, messages, models] = await Promise.all([
-        window.pi.getState(),
-        window.pi.getMessages(),
-        window.pi.getAvailableModels(),
+        piClient.getState(),
+        piClient.getMessages(),
+        piClient.getAvailableModels(),
       ]);
-      set({ state, runState: state.runState, messages, models, lastError: null });
+      set((s) => ({
+        activeChatId: targetChatId,
+        state,
+        runState: state.runState,
+        messages,
+        models,
+        lastError: null,
+        ...(targetChatId
+          ? {
+              messagesByChat: { ...s.messagesByChat, [targetChatId]: messages },
+              stateByChat: { ...s.stateByChat, [targetChatId]: state },
+            }
+          : {}),
+      }));
     } catch (err) {
-      set({ messages: [], lastError: err instanceof Error ? err.message : String(err) });
+      set({
+        activeChatId: targetChatId,
+        messages: [],
+        lastError: err instanceof Error ? err.message : String(err),
+      });
     }
   },
 
   async loadModels() {
     try {
-      const models = await window.pi.getAvailableModels();
+      const models = await piClient.getAvailableModels();
       set({ models });
     } catch {
       // No active backend yet — models load on chat open.
@@ -259,9 +342,13 @@ export const useAgentStore = create<AgentStoreState>((set, get) => ({
 
   async setModel(provider: string, modelId: string) {
     try {
-      await window.pi.setModel(provider, modelId);
-      const state = await window.pi.getState();
-      set({ state, runState: state.runState });
+      await piClient.setModel(provider, modelId);
+      const state = await piClient.getState();
+      set((s) => ({
+        state,
+        runState: state.runState,
+        ...(s.activeChatId ? { stateByChat: { ...s.stateByChat, [s.activeChatId]: state } } : {}),
+      }));
     } catch (err) {
       set({ lastError: err instanceof Error ? err.message : String(err) });
     }
@@ -269,9 +356,13 @@ export const useAgentStore = create<AgentStoreState>((set, get) => ({
 
   async setThinkingLevel(level: ThinkingLevel) {
     try {
-      await window.pi.setThinkingLevel(level);
-      const state = await window.pi.getState();
-      set({ state, runState: state.runState });
+      await piClient.setThinkingLevel(level);
+      const state = await piClient.getState();
+      set((s) => ({
+        state,
+        runState: state.runState,
+        ...(s.activeChatId ? { stateByChat: { ...s.stateByChat, [s.activeChatId]: state } } : {}),
+      }));
     } catch (err) {
       set({ lastError: err instanceof Error ? err.message : String(err) });
     }
@@ -297,32 +388,52 @@ export const useAgentStore = create<AgentStoreState>((set, get) => ({
         ? { queue: { kind: queueKind, status: 'pending' as const, text: trimmed, createdAt: Date.now() } }
         : {}),
     };
-    set((s) => ({ messages: [...s.messages, userMessage] }));
+    set((s) => {
+      const messages = [...s.messages, userMessage];
+      return {
+        messages,
+        ...(s.activeChatId
+          ? { messagesByChat: { ...s.messagesByChat, [s.activeChatId]: messages } }
+          : {}),
+      };
+    });
     try {
       const options: PromptOptions = {};
       if (images.length > 0) options.images = images;
       if (streamingBehavior) options.streamingBehavior = streamingBehavior;
-      await window.pi.prompt(trimmed, options);
+      await piClient.prompt(trimmed, options);
       if (queueKind) {
-        set((s) => ({
-          messages: s.messages.map((m) =>
+        set((s) => {
+          const messages = s.messages.map((m) =>
             m.id === userMessage.id && m.queue?.status === 'pending'
               ? { ...m, queue: { ...m.queue, status: 'queued' as const } }
               : m,
-          ),
-        }));
+          );
+          return {
+            messages,
+            ...(s.activeChatId
+              ? { messagesByChat: { ...s.messagesByChat, [s.activeChatId]: messages } }
+              : {}),
+          };
+        });
       }
     } catch (err) {
-      set((s) => ({
-        messages: s.messages.filter((m) => m.id !== userMessage.id),
-        lastError: err instanceof Error ? err.message : String(err),
-      }));
+      set((s) => {
+        const messages = s.messages.filter((m) => m.id !== userMessage.id);
+        return {
+          messages,
+          lastError: err instanceof Error ? err.message : String(err),
+          ...(s.activeChatId
+            ? { messagesByChat: { ...s.messagesByChat, [s.activeChatId]: messages } }
+            : {}),
+        };
+      });
     }
   },
 
   async abort() {
     try {
-      await window.pi.abort();
+      await piClient.abort();
     } catch {
       // Swallow — abort during idle is a no-op.
     }
@@ -333,6 +444,14 @@ export const useAgentStore = create<AgentStoreState>((set, get) => ({
   },
 
   discardQueuedMessage(messageId: string) {
-    set((s) => ({ messages: s.messages.filter((m) => m.id !== messageId) }));
+    set((s) => {
+      const messages = s.messages.filter((m) => m.id !== messageId);
+      return {
+        messages,
+        ...(s.activeChatId
+          ? { messagesByChat: { ...s.messagesByChat, [s.activeChatId]: messages } }
+          : {}),
+      };
+    });
   },
 }));

@@ -12,7 +12,6 @@ import {
   Trash2,
 } from 'lucide-react';
 import type { Chat } from '../../shared/ipc.js';
-import { useAgentStore } from '../stores/agent.js';
 import { useProjectsStore } from '../stores/projects.js';
 import { useUiStore } from '../stores/ui.js';
 import { SoftCells } from './SoftCells.js';
@@ -99,7 +98,6 @@ function ChatRow({
  */
 export function Sidebar() {
   const setView = useUiStore((s) => s.setView);
-  const runState = useAgentStore((s) => s.runState);
   const {
     projects,
     chatsByProject,
@@ -112,8 +110,8 @@ export function Sidebar() {
     newChat,
     openChat,
     deleteChat,
+    isChatRunning,
   } = useProjectsStore();
-  const isActiveRunning = (id: string) => id === activeChatId && runState !== 'idle';
 
   useEffect(() => {
     void hydrate();
@@ -229,7 +227,7 @@ export function Sidebar() {
                       chat={c}
                       indented
                       selected={c.id === activeChatId}
-                      running={isActiveRunning(c.id)}
+                      running={isChatRunning(c.id)}
                       onOpen={() => void openChat(c.id)}
                       onDelete={() => void deleteChat(c.id)}
                     />
@@ -249,7 +247,7 @@ export function Sidebar() {
                 key={`recent-${c.id}`}
                 chat={c}
                 selected={c.id === activeChatId}
-                running={isActiveRunning(c.id)}
+                running={isChatRunning(c.id)}
                 onOpen={() => void openChat(c.id)}
               />
             ))}

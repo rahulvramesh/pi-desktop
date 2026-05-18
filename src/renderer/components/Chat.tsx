@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState, type ClipboardEvent, type DragEvent, type KeyboardEvent } from 'react';
 import * as Popover from '@radix-ui/react-popover';
 import { ArrowUp, ChevronDown, Cpu, Gauge, ImagePlus, Info, MoreHorizontal, PanelLeft, Sparkles, Square, X } from 'lucide-react';
+import { piClient } from '../client/pi-client.js';
 import { useAgentStore, type DisplayMessage } from '../stores/agent.js';
 import { useProjectsStore } from '../stores/projects.js';
 import { useUiStore } from '../stores/ui.js';
@@ -721,7 +722,7 @@ export function Chat() {
       return;
     }
     let cancelled = false;
-    void window.pi.projects.icon(projectPath).then((d) => {
+    void piClient.projects.icon(projectPath).then((d) => {
       if (!cancelled) setProjectIcon(d);
     });
     return () => {

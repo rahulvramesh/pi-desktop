@@ -72,7 +72,7 @@ function Swatches({
  * The brief calls for theme, density, and an agent-state debug toggle. We
  * also wire accent (uniform with the design prototype) and the right-pane
  * picker since those are pure-CSS shifts that cost nothing once tokens are in
- * place. Persisted via electron-store through `window.pi.prefs`.
+ * place. Persisted via electron-store through `piClient.prefs`.
  */
 export function TweaksPanel() {
   const open = useUiStore((s) => s.tweaksOpen);

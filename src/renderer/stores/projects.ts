@@ -8,12 +8,13 @@
  */
 
 import { create } from 'zustand';
-import type { Chat, Project } from '../../shared/ipc.js';
+import { piClient } from '../client/pi-client.js';
+import type { Chat, ChatRuntimeStatus, Project } from '../../shared/ipc.js';
 import { useAgentStore } from './agent.js';
 import { useUiStore } from './ui.js';
 
-/** Install once: a finished run may have auto-titled the chat in main, so
- *  refresh the active project's chats to surface the new title live. */
+/** Install once: finished runs may auto-title/touch chats in main, so
+ *  refresh affected project chat lists as background runtimes complete. */
 let agentSubInstalled = false;
 
 interface ProjectsState {
@@ -22,6 +23,7 @@ interface ProjectsState {
   expanded: Set<string>;
   activeProjectId: string | null;
   activeChatId: string | null;
+  runtimeByChat: Record<string, ChatRuntimeStatus>;
   loading: boolean;
 
   hydrate(): Promise<void>;
@@ -33,6 +35,7 @@ interface ProjectsState {
   openChat(chatId: string): Promise<void>;
   renameChat(id: string, title: string): Promise<void>;
   deleteChat(id: string): Promise<void>;
+  isChatRunning(id: string): boolean;
   activeProjectPath(): string | null;
   activeProject(): Project | null;
   activeChat(): Chat | null;
@@ -44,22 +47,33 @@ export const useProjectsStore = create<ProjectsState>((set, get) => ({
   expanded: new Set(),
   activeProjectId: null,
   activeChatId: null,
+  runtimeByChat: {},
   loading: false,
 
   async hydrate() {
     if (!agentSubInstalled) {
       agentSubInstalled = true;
-      window.pi.subscribe((ev) => {
-        if (ev.type === 'agent_end') {
-          const pid = get().activeProjectId;
-          if (pid) void get().loadChats(pid);
+      piClient.subscribeAll((envelope) => {
+        if (envelope.event.type === 'agent_end') {
+          void get().loadChats(envelope.projectId);
         }
+      });
+      piClient.runtimes.subscribe((status) => {
+        set((s) => ({ runtimeByChat: { ...s.runtimeByChat, [status.chatId]: status } }));
+        const pid = get().activeProjectId;
+        if (status.runState === 'idle' && pid) void get().loadChats(pid);
       });
     }
     set({ loading: true });
     try {
-      const projects = await window.pi.projects.list();
-      set({ projects });
+      const [projects, runtimeStatuses] = await Promise.all([
+        piClient.projects.list(),
+        piClient.runtimes.list(),
+      ]);
+      set({
+        projects,
+        runtimeByChat: Object.fromEntries(runtimeStatuses.map((status) => [status.chatId, status])),
+      });
       // Eagerly load chats for every project so the grouped sidebar is
       // populated without a per-row click.
       await Promise.all(projects.map((p) => get().loadChats(p.id)));
@@ -69,10 +83,10 @@ export const useProjectsStore = create<ProjectsState>((set, get) => ({
   },
 
   async addProject() {
-    const picked = await window.pi.projects.pick();
+    const picked = await piClient.projects.pick();
     if (!picked) return;
-    const project = await window.pi.projects.add(picked.path, picked.name);
-    const projects = await window.pi.projects.list();
+    const project = await piClient.projects.add(picked.path, picked.name);
+    const projects = await piClient.projects.list();
     set((s) => ({
       projects,
       expanded: new Set(s.expanded).add(project.id),
@@ -81,13 +95,25 @@ export const useProjectsStore = create<ProjectsState>((set, get) => ({
   },
 
   async removeProject(id) {
-    await window.pi.projects.remove(id);
+    const running = (get().chatsByProject[id] ?? []).filter((chat) => get().isChatRunning(chat.id));
+    if (
+      running.length > 0 &&
+      !window.confirm(
+        `This project has ${running.length} running chat${running.length === 1 ? '' : 's'}. Remove it and abort those runtimes?`,
+      )
+    ) {
+      return;
+    }
+    await piClient.projects.remove(id);
     set((s) => {
       const chatsByProject = { ...s.chatsByProject };
       delete chatsByProject[id];
       return {
         projects: s.projects.filter((p) => p.id !== id),
         chatsByProject,
+        runtimeByChat: Object.fromEntries(
+          Object.entries(s.runtimeByChat).filter(([, status]) => status.projectId !== id),
+        ),
       };
     });
   },
@@ -103,33 +129,39 @@ export const useProjectsStore = create<ProjectsState>((set, get) => ({
   },
 
   async loadChats(projectId) {
-    const chats = await window.pi.chats.list(projectId);
+    const chats = await piClient.chats.list(projectId);
     set((s) => ({ chatsByProject: { ...s.chatsByProject, [projectId]: chats } }));
   },
 
   async newChat(projectId) {
-    const chat = await window.pi.chats.create(projectId);
+    const chat = await piClient.chats.create(projectId);
     await get().loadChats(projectId);
     await get().openChat(chat.id);
   },
 
   async openChat(chatId) {
-    const chat = await window.pi.chats.open(chatId);
+    const chat = await piClient.chats.open(chatId);
     set({ activeChatId: chat.id, activeProjectId: chat.projectId });
     useUiStore.getState().setView('chat');
-    await useAgentStore.getState().loadActiveChat();
+    await useAgentStore.getState().loadActiveChat(chat.id);
     // Recency may have changed (main touches updated_at) — refresh the group.
     await get().loadChats(chat.projectId);
   },
 
   async renameChat(id, title) {
-    await window.pi.chats.rename(id, title);
+    await piClient.chats.rename(id, title);
     const projectId = get().activeProjectId;
     if (projectId) await get().loadChats(projectId);
   },
 
   async deleteChat(id) {
-    await window.pi.chats.delete(id);
+    if (
+      get().isChatRunning(id) &&
+      !window.confirm('This chat is still running. Delete it and abort its runtime?')
+    ) {
+      return;
+    }
+    await piClient.chats.delete(id);
     set((s) => {
       const next: Record<string, Chat[]> = {};
       for (const [pid, list] of Object.entries(s.chatsByProject)) {
@@ -138,8 +170,16 @@ export const useProjectsStore = create<ProjectsState>((set, get) => ({
       return {
         chatsByProject: next,
         activeChatId: s.activeChatId === id ? null : s.activeChatId,
+        runtimeByChat: Object.fromEntries(
+          Object.entries(s.runtimeByChat).filter(([chatId]) => chatId !== id),
+        ),
       };
     });
+  },
+
+  isChatRunning(id) {
+    const status = get().runtimeByChat[id];
+    return !!status?.hasRuntime && status.runState !== 'idle';
   },
 
   activeProjectPath() {

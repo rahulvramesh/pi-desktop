@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { piClient } from '../client/pi-client.js';
 import { Cpu, GitBranch, GitMerge } from 'lucide-react';
 import { useAgentStore } from '../stores/agent.js';
 import { useProjectsStore } from '../stores/projects.js';
@@ -37,7 +38,7 @@ export function StatusBar() {
 
   useEffect(() => {
     let cancelled = false;
-    void window.pi.meta().then((m) => {
+    void piClient.meta().then((m) => {
       if (!cancelled) setMeta(m);
     });
     return () => {
@@ -54,12 +55,12 @@ export function StatusBar() {
     }
     let cancelled = false;
     const refresh = () => {
-      void window.pi.git.status(projectPath).then((g) => {
+      void piClient.git.status(projectPath).then((g) => {
         if (!cancelled) setGit(g);
       });
     };
     refresh();
-    const unsub = window.pi.subscribe((ev) => {
+    const unsub = piClient.subscribe((ev) => {
       if (ev.type === 'agent_end') refresh();
     });
     return () => {

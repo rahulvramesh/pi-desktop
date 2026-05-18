@@ -14,6 +14,7 @@ import { dialog, ipcMain } from 'electron';
 
 import { IPC, type Chat, type FsEntry, type Project } from '../shared/ipc.js';
 import { chatsRepo, projectsRepo } from './db.js';
+import { disposeChatRuntime, disposeProjectRuntimes } from './agent-bridge.js';
 
 /** Directories never worth showing/scanning in the Files pane. */
 const SKIP_DIRS = new Set([
@@ -171,6 +172,7 @@ export function installProjectsBridge(): void {
   );
 
   ipcMain.handle(IPC.ProjectsRemove, async (_e, id: string): Promise<void> => {
+    await disposeProjectRuntimes(id);
     projectsRepo.remove(id);
   });
 
@@ -190,6 +192,7 @@ export function installProjectsBridge(): void {
   });
 
   ipcMain.handle(IPC.ChatsDelete, async (_e, id: string): Promise<void> => {
+    await disposeChatRuntime(id);
     chatsRepo.delete(id);
   });
 

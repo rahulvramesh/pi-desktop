@@ -32,10 +32,16 @@ export const IPC = {
   SwitchSession: 'agent:switchSession',
   Fork: 'agent:fork',
   Event: 'agent:event',
+  EventEnvelope: 'agent:event:envelope',
+
+  RuntimeStatusEvent: 'runtime:status',
+  RuntimeStatusesGet: 'runtime:statuses:get',
 
   RpcLogEvent: 'dev:rpc-log',
   RpcLogsGet: 'dev:rpc-logs:get',
   RpcLogsClear: 'dev:rpc-logs:clear',
+
+  NotificationTest: 'notification:test',
 
   PrefsGet: 'prefs:get',
   PrefsSet: 'prefs:set',
@@ -81,9 +87,31 @@ export type AppPlatform =
   | 'netbsd';
 
 export interface AppMeta {
-  backend: 'mock' | 'sdk-local' | 'rpc-local' | 'rpc-ssh';
+  backend: 'mock' | 'sdk-local' | 'rpc-local' | 'rpc-ssh' | 'proxy';
   version: string;
   platform: AppPlatform;
+}
+
+export interface ChatRuntimeStatus {
+  chatId: string;
+  projectId: string;
+  runState: AgentState['runState'];
+  /** True when this runtime backs the currently visible chat in this window. */
+  active: boolean;
+  /** Warm/running runtime exists in the main process. */
+  hasRuntime: boolean;
+  updatedAt: number;
+}
+
+export interface NotificationTestResult {
+  shouldNotify: boolean;
+  sound: boolean;
+  toast: boolean;
+  attention: boolean;
+  reason?: string;
+  notifiedAt: number | null;
+  dryRun: boolean;
+  toastSupported: boolean;
 }
 
 export interface PrefsShape {
@@ -179,14 +207,28 @@ export interface PiApi {
   switchSession(path: string): Promise<void>;
   fork(entryId: string): Promise<void>;
 
-  /** Subscribe to streamed AgentEvents. Returns an unsubscribe callback. */
+  /** Subscribe to streamed AgentEvents for the visible chat. Returns an unsubscribe callback. */
   subscribe(listener: (event: AgentEvent) => void): () => void;
+
+  /** Subscribe to chat-scoped events for every warm/running chat. */
+  subscribeAll(listener: (envelope: AgentEventEnvelope) => void): () => void;
+
+  /** Runtime status for all warm/running chats, including background chats. */
+  runtimes: {
+    list(): Promise<ChatRuntimeStatus[]>;
+    subscribe(listener: (status: ChatRuntimeStatus) => void): () => void;
+  };
 
   /** Developer-mode trace of JSONL RPC traffic from `pi --mode rpc`. */
   rpcLogs: {
     list(): Promise<RpcLogEntry[]>;
     clear(): Promise<void>;
     subscribe(listener: (entry: RpcLogEntry) => void): () => void;
+  };
+
+  notifications: {
+    /** Fire a native completion notification using the current notification prefs. */
+    test(): Promise<NotificationTestResult>;
   };
 
   prefs: {
@@ -251,7 +293,7 @@ declare global {
 
 /**
  * Bridge events from main → renderer. The renderer subscribes via
- * window.pi.subscribe; this is the wire-level union that crosses IPC.
+ * piClient.subscribe / piClient.subscribeAll; this is the wire-level union that crosses IPC.
  *
  * `text_delta` events are batched by the main process into a single
  * `text_delta_batch` event before sending — keeps IPC traffic predictable
@@ -262,3 +304,21 @@ export type WireEvent =
   | AgentEvent
   | { type: 'text_delta_batch'; messageId: string; delta: string }
   | { type: 'thinking_delta_batch'; messageId: string; delta: string };
+
+/** Chat-scoped event after preload expands any wire-only batching. */
+export interface AgentEventEnvelope {
+  chatId: string;
+  projectId: string;
+  seq: number;
+  timestamp: number;
+  event: AgentEvent;
+}
+
+/** Main → preload shape; `event` may still contain IPC batching wrappers. */
+export interface WireEventEnvelope {
+  chatId: string;
+  projectId: string;
+  seq: number;
+  timestamp: number;
+  event: WireEvent;
+}

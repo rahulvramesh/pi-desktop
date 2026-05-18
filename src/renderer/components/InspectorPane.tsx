@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
+import { piClient } from '../client/pi-client.js';
 import {
   Bug,
   ChevronRight,
@@ -179,7 +180,7 @@ function FilesView() {
     }
     let cancelled = false;
     setLoading(true);
-    void window.pi.fs
+    void piClient.fs
       .tree(projectPath)
       .then((t) => {
         if (cancelled) return;
@@ -282,10 +283,10 @@ function RpcLogView() {
 
   useEffect(() => {
     let cancelled = false;
-    void window.pi.rpcLogs.list().then((logs) => {
+    void piClient.rpcLogs.list().then((logs) => {
       if (!cancelled) setEntries(logs);
     });
-    const unsubscribe = window.pi.rpcLogs.subscribe((entry) => {
+    const unsubscribe = piClient.rpcLogs.subscribe((entry) => {
       setEntries((prev) => [...prev, entry].slice(-800));
     });
     return () => {
@@ -319,7 +320,7 @@ function RpcLogView() {
 
   const clear = () => {
     setEntries([]);
-    void window.pi.rpcLogs.clear();
+    void piClient.rpcLogs.clear();
   };
 
   const copyVisible = async () => {

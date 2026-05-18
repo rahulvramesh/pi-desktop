@@ -4,14 +4,12 @@
  * A chat now owns its own AgentBackend runtime. Switching chats changes which
  * runtime is visible, but it does not dispose or abort the previous runtime.
  * That allows multiple chats in the same project (or different projects) to run
- * concurrently. Events from inactive runtimes are still used to persist their
- * session file and recency, but are not forwarded into the currently visible
- * renderer transcript.
+ * concurrently. Events are emitted both through the legacy active-chat stream
+ * and through chat-scoped envelopes so the renderer can track background runs.
  *
  * Backpressure: text_delta events arrive at LLM-streaming rates. We coalesce
  * them per-chat/per-message into a single text_delta_batch at ~16ms cadence
- * before crossing IPC; all other events pass through unmodified for the active
- * chat only.
+ * before crossing IPC; all other events pass through unmodified.
  */
 
 import { BrowserWindow, ipcMain } from 'electron';
@@ -26,12 +24,23 @@ import type {
   ThinkingLevel,
 } from '../agent/backend.js';
 import { createBackend, resolveBackendConfig } from '../agent/factory.js';
-import { IPC, type AppMeta, type Chat, type WireEvent } from '../shared/ipc.js';
+import { shutdownRuntimeProxy } from '../agent/proxy-process.js';
+import {
+  IPC,
+  type AppMeta,
+  type Chat,
+  type ChatRuntimeStatus,
+  type WireEvent,
+  type WireEventEnvelope,
+} from '../shared/ipc.js';
 import { chatsRepo, projectsRepo } from './db.js';
 import { notifyTurnEnd } from './turn-end-notifier.js';
 
 const BATCH_INTERVAL_MS = 16;
 const RPC_LOG_LIMIT = 800;
+const DEFAULT_IDLE_RUNTIME_TTL_MS = 15 * 60 * 1000;
+const DEFAULT_MAX_WARM_IDLE_RUNTIMES = 6;
+const RUNTIME_CLEANUP_INTERVAL_MS = 60 * 1000;
 
 interface PendingBatch {
   delta: string;
@@ -46,6 +55,11 @@ interface ChatRuntime {
   unsubscribeRpcLogs: (() => void) | null;
   pendingBatches: Map<string, PendingBatch>;
   pendingThinking: Map<string, PendingBatch>;
+  runState: AgentState['runState'];
+  statusUpdatedAt: number;
+  eventSeq: number;
+  idleSince: number;
+  lastUsedAt: number;
   runStartedAt: number | null;
   suppressNextCompletionNotify: boolean;
   lastNotificationAt: number | null;
@@ -54,6 +68,7 @@ interface ChatRuntime {
 const runtimes = new Map<string, ChatRuntime>();
 let activeChatId: string | null = null;
 let rpcLogs: RpcLogEntry[] = [];
+let cleanupTimer: ReturnType<typeof setInterval> | null = null;
 
 const EMPTY_STATE: AgentState = {
   runState: 'idle',
@@ -69,13 +84,43 @@ const EMPTY_STATE: AgentState = {
   sessionId: 'none',
 };
 
+function numberFromEnv(name: string, fallback: number): number {
+  const raw = process.env[name]?.trim();
+  if (!raw) return fallback;
+  const parsed = Number(raw);
+  return Number.isFinite(parsed) && parsed >= 0 ? parsed : fallback;
+}
+
+function idleRuntimeTtlMs(): number {
+  return numberFromEnv('PI_RUNTIME_IDLE_TTL_MS', DEFAULT_IDLE_RUNTIME_TTL_MS);
+}
+
+function maxWarmIdleRuntimes(): number {
+  return numberFromEnv('PI_RUNTIME_MAX_WARM_IDLE', DEFAULT_MAX_WARM_IDLE_RUNTIMES);
+}
+
 function sendToAllRenderers(event: WireEvent): void {
   for (const win of BrowserWindow.getAllWindows()) {
     if (!win.isDestroyed()) win.webContents.send(IPC.Event, event);
   }
 }
 
-function sendToAllRenderersIfActive(runtime: ChatRuntime, event: WireEvent): void {
+function sendEnvelopeToAllRenderers(envelope: WireEventEnvelope): void {
+  for (const win of BrowserWindow.getAllWindows()) {
+    if (!win.isDestroyed()) win.webContents.send(IPC.EventEnvelope, envelope);
+  }
+}
+
+function sendRuntimeEvent(runtime: ChatRuntime, event: WireEvent): void {
+  runtime.lastUsedAt = Date.now();
+  runtime.eventSeq += 1;
+  sendEnvelopeToAllRenderers({
+    chatId: runtime.chatId,
+    projectId: runtime.projectId,
+    seq: runtime.eventSeq,
+    timestamp: runtime.lastUsedAt,
+    event,
+  });
   if (runtime.chatId === activeChatId) sendToAllRenderers(event);
 }
 
@@ -83,6 +128,32 @@ function sendRpcLogToAllRenderers(entry: RpcLogEntry): void {
   for (const win of BrowserWindow.getAllWindows()) {
     if (!win.isDestroyed()) win.webContents.send(IPC.RpcLogEvent, entry);
   }
+}
+
+function runtimeStatus(runtime: ChatRuntime): ChatRuntimeStatus {
+  return {
+    chatId: runtime.chatId,
+    projectId: runtime.projectId,
+    runState: runtime.runState,
+    active: runtime.chatId === activeChatId,
+    hasRuntime: true,
+    updatedAt: runtime.statusUpdatedAt,
+  };
+}
+
+function sendRuntimeStatusToAllRenderers(status: ChatRuntimeStatus): void {
+  for (const win of BrowserWindow.getAllWindows()) {
+    if (!win.isDestroyed()) win.webContents.send(IPC.RuntimeStatusEvent, status);
+  }
+}
+
+function broadcastRuntimeStatus(runtime: ChatRuntime): void {
+  runtime.statusUpdatedAt = Date.now();
+  sendRuntimeStatusToAllRenderers(runtimeStatus(runtime));
+}
+
+function broadcastAllRuntimeStatuses(): void {
+  for (const runtime of runtimes.values()) sendRuntimeStatusToAllRenderers(runtimeStatus(runtime));
 }
 
 function recordRpcLog(entry: RpcLogEntry): void {
@@ -94,8 +165,9 @@ function recordRpcLog(entry: RpcLogEntry): void {
 function flushBatch(runtime: ChatRuntime, messageId: string): void {
   const pending = runtime.pendingBatches.get(messageId);
   if (!pending) return;
+  if (pending.timer) clearTimeout(pending.timer);
   if (pending.delta.length > 0) {
-    sendToAllRenderersIfActive(runtime, {
+    sendRuntimeEvent(runtime, {
       type: 'text_delta_batch',
       messageId,
       delta: pending.delta,
@@ -108,8 +180,9 @@ function flushBatch(runtime: ChatRuntime, messageId: string): void {
 function flushThinkingBatch(runtime: ChatRuntime, messageId: string): void {
   const pending = runtime.pendingThinking.get(messageId);
   if (!pending) return;
+  if (pending.timer) clearTimeout(pending.timer);
   if (pending.delta.length > 0) {
-    sendToAllRenderersIfActive(runtime, {
+    sendRuntimeEvent(runtime, {
       type: 'thinking_delta_batch',
       messageId,
       delta: pending.delta,
@@ -117,6 +190,13 @@ function flushThinkingBatch(runtime: ChatRuntime, messageId: string): void {
   }
   pending.delta = '';
   pending.timer = null;
+}
+
+function flushAllPending(runtime: ChatRuntime): void {
+  for (const messageId of Array.from(runtime.pendingBatches.keys())) flushBatch(runtime, messageId);
+  for (const messageId of Array.from(runtime.pendingThinking.keys())) {
+    flushThinkingBatch(runtime, messageId);
+  }
 }
 
 function clearPending(runtime: ChatRuntime): void {
@@ -132,8 +212,26 @@ function clearPending(runtime: ChatRuntime): void {
 
 function dispatchEvent(runtime: ChatRuntime, event: AgentEvent): void {
   if (event.type === 'agent_start') {
+    runtime.runState = 'thinking';
+    runtime.idleSince = 0;
+    runtime.lastUsedAt = Date.now();
     runtime.runStartedAt = Date.now();
     runtime.suppressNextCompletionNotify = false;
+    broadcastRuntimeStatus(runtime);
+  } else if (event.type === 'agent_end') {
+    runtime.runState = 'idle';
+    runtime.idleSince = Date.now();
+    broadcastRuntimeStatus(runtime);
+  } else if (event.type === 'state_changed') {
+    runtime.runState = event.state.runState;
+    runtime.idleSince = event.state.runState === 'idle' ? Date.now() : 0;
+    broadcastRuntimeStatus(runtime);
+  } else if (event.type === 'tool_execution_start') {
+    if (runtime.runState !== 'running') {
+      runtime.runState = 'running';
+      runtime.idleSince = 0;
+      broadcastRuntimeStatus(runtime);
+    }
   }
 
   if (event.type === 'text_delta') {
@@ -171,7 +269,7 @@ function dispatchEvent(runtime: ChatRuntime, event: AgentEvent): void {
     runtime.pendingThinking.delete(event.messageId);
   }
 
-  sendToAllRenderersIfActive(runtime, event);
+  sendRuntimeEvent(runtime, event);
 
   // When any run finishes (active or inactive), persist its pi session file so
   // the chat can be resumed later, and bump its recency for sidebar ordering.
@@ -203,6 +301,8 @@ function dispatchEvent(runtime: ChatRuntime, event: AgentEvent): void {
       .catch(() => {
         // Native notifications are best-effort and should never break streaming.
       });
+
+    pruneIdleRuntimes();
   }
 }
 
@@ -213,6 +313,9 @@ function deriveTitle(text: string): string {
 }
 
 async function disposeRuntime(runtime: ChatRuntime): Promise<void> {
+  runtime.runState = 'idle';
+  runtime.statusUpdatedAt = Date.now();
+  sendRuntimeStatusToAllRenderers({ ...runtimeStatus(runtime), hasRuntime: false, active: false });
   runtime.unsubscribe();
   runtime.unsubscribeRpcLogs?.();
   clearPending(runtime);
@@ -224,6 +327,56 @@ async function disposeAllRuntimes(): Promise<void> {
   runtimes.clear();
   activeChatId = null;
   await Promise.allSettled(toDispose.map((runtime) => disposeRuntime(runtime)));
+}
+
+function idleInactiveRuntimes(now = Date.now()): ChatRuntime[] {
+  return [...runtimes.values()]
+    .filter(
+      (runtime) =>
+        runtime.chatId !== activeChatId && runtime.runState === 'idle' && runtime.idleSince > 0,
+    )
+    .sort((a, b) => (a.idleSince || now) - (b.idleSince || now));
+}
+
+function pruneIdleRuntimes(): void {
+  const ttl = idleRuntimeTtlMs();
+  const maxWarmIdle = maxWarmIdleRuntimes();
+  if (ttl === 0 && maxWarmIdle === 0) return;
+
+  const now = Date.now();
+  const candidates = idleInactiveRuntimes(now);
+  const selected = new Set<ChatRuntime>();
+
+  if (ttl > 0) {
+    for (const runtime of candidates) {
+      if (now - runtime.idleSince >= ttl) selected.add(runtime);
+    }
+  }
+
+  if (maxWarmIdle > 0 && candidates.length > maxWarmIdle) {
+    for (const runtime of candidates.slice(0, candidates.length - maxWarmIdle)) {
+      selected.add(runtime);
+    }
+  }
+
+  for (const runtime of selected) {
+    if (!runtimes.delete(runtime.chatId)) continue;
+    void disposeRuntime(runtime).catch(() => {
+      // Cleanup is best-effort; an explicit close/delete path will retry.
+    });
+  }
+}
+
+function startRuntimeCleanup(): void {
+  if (cleanupTimer) return;
+  cleanupTimer = setInterval(pruneIdleRuntimes, RUNTIME_CLEANUP_INTERVAL_MS);
+  (cleanupTimer as ReturnType<typeof setInterval> & { unref?: () => void }).unref?.();
+}
+
+function stopRuntimeCleanup(): void {
+  if (!cleanupTimer) return;
+  clearInterval(cleanupTimer);
+  cleanupTimer = null;
 }
 
 /**
@@ -240,12 +393,20 @@ async function openChat(chatId: string): Promise<Chat> {
   const existing = runtimes.get(chatId);
   if (existing) {
     activeChatId = chatId;
+    existing.lastUsedAt = Date.now();
+    existing.statusUpdatedAt = Date.now();
     projectsRepo.touch(project.id);
     chatsRepo.touch(chat.id);
+    broadcastAllRuntimeStatuses();
+    pruneIdleRuntimes();
     return chatsRepo.get(chatId) ?? chat;
   }
 
-  const config = resolveBackendConfig(process.env, project.path);
+  const config = resolveBackendConfig(process.env, project.path, {
+    chatId,
+    projectId: project.id,
+    title: chat.title,
+  });
   const created = await createBackend(config);
   let runtime: ChatRuntime | null = null;
   const unsubscribe = created.subscribe((event) => {
@@ -260,6 +421,11 @@ async function openChat(chatId: string): Promise<Chat> {
     unsubscribeRpcLogs,
     pendingBatches: new Map(),
     pendingThinking: new Map(),
+    runState: 'idle',
+    statusUpdatedAt: Date.now(),
+    eventSeq: 0,
+    idleSince: Date.now(),
+    lastUsedAt: Date.now(),
     runStartedAt: null,
     suppressNextCompletionNotify: false,
     lastNotificationAt: null,
@@ -279,11 +445,27 @@ async function openChat(chatId: string): Promise<Chat> {
   activeChatId = chatId;
   projectsRepo.touch(project.id);
   chatsRepo.touch(chat.id);
+  broadcastAllRuntimeStatuses();
+  pruneIdleRuntimes();
   return chatsRepo.get(chatId) ?? chat;
 }
 
 function activeRuntime(): ChatRuntime | null {
-  return activeChatId ? (runtimes.get(activeChatId) ?? null) : null;
+  if (activeChatId) {
+    const runtime = runtimes.get(activeChatId);
+    if (runtime) return runtime;
+  }
+  // Defensive recovery for renderer/main races during startup or reload: if
+  // there is exactly one warm runtime, it is the only possible command target.
+  if (runtimes.size === 1) {
+    const runtime = [...runtimes.values()][0];
+    if (runtime) {
+      activeChatId = runtime.chatId;
+      broadcastRuntimeStatus(runtime);
+      return runtime;
+    }
+  }
+  return null;
 }
 
 function requireRuntime(): ChatRuntime {
@@ -300,6 +482,7 @@ export const backendMeta = {
 };
 
 export function installAgentBridge(): void {
+  startRuntimeCleanup();
   ipcMain.handle(IPC.ChatOpen, async (_e, chatId: string) => openChat(chatId));
 
   ipcMain.handle(IPC.Prompt, async (_e, text: string, options?: PromptOptions) => {
@@ -322,7 +505,17 @@ export function installAgentBridge(): void {
     await runtime.backend.abort();
   });
   ipcMain.handle(IPC.GetState, async () => activeRuntime()?.backend.getState() ?? EMPTY_STATE);
-  ipcMain.handle(IPC.GetMessages, async () => activeRuntime()?.backend.getMessages() ?? []);
+  ipcMain.handle(IPC.GetMessages, async () => {
+    const runtime = activeRuntime();
+    if (!runtime) return [];
+    // Avoid duplicate text when switching back to a streaming chat: first flush
+    // any IPC-coalesced deltas, then reconcile with backend history.
+    flushAllPending(runtime);
+    return runtime.backend.getMessages();
+  });
+  ipcMain.handle(IPC.RuntimeStatusesGet, async (): Promise<ChatRuntimeStatus[]> =>
+    [...runtimes.values()].map(runtimeStatus),
+  );
   ipcMain.handle(IPC.Models, async () => activeRuntime()?.backend.getAvailableModels() ?? []);
   ipcMain.handle(IPC.SetModel, async (_e, provider: string, modelId: string) => {
     await requireRuntime().backend.setModel(provider, modelId);
@@ -355,6 +548,27 @@ export function installAgentBridge(): void {
   });
 }
 
+export async function disposeChatRuntime(chatId: string): Promise<void> {
+  const runtime = runtimes.get(chatId);
+  if (!runtime) return;
+  runtimes.delete(chatId);
+  if (activeChatId === chatId) activeChatId = null;
+  await disposeRuntime(runtime);
+  broadcastAllRuntimeStatuses();
+}
+
+export async function disposeProjectRuntimes(projectId: string): Promise<void> {
+  const matching = [...runtimes.values()].filter((runtime) => runtime.projectId === projectId);
+  for (const runtime of matching) {
+    runtimes.delete(runtime.chatId);
+    if (activeChatId === runtime.chatId) activeChatId = null;
+  }
+  await Promise.allSettled(matching.map((runtime) => disposeRuntime(runtime)));
+  broadcastAllRuntimeStatuses();
+}
+
 export async function disposeAgentBridge(): Promise<void> {
+  stopRuntimeCleanup();
   await disposeAllRuntimes();
+  await shutdownRuntimeProxy();
 }

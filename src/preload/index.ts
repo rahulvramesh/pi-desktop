@@ -24,41 +24,55 @@ import type {
 } from '../agent/backend.js';
 import {
   IPC,
+  type AgentEventEnvelope,
   type Chat,
+  type ChatRuntimeStatus,
+  type NotificationTestResult,
   type FsEntry,
   type PiApi,
   type PrefsShape,
   type Project,
   type WireEvent,
+  type WireEventEnvelope,
 } from '../shared/ipc.js';
 
 type Listener = (event: AgentEvent) => void;
 const listeners = new Set<Listener>();
+type EnvelopeListener = (envelope: AgentEventEnvelope) => void;
+const envelopeListeners = new Set<EnvelopeListener>();
 type RpcLogListener = (entry: RpcLogEntry) => void;
 const rpcLogListeners = new Set<RpcLogListener>();
+type RuntimeStatusListener = (status: ChatRuntimeStatus) => void;
+const runtimeStatusListeners = new Set<RuntimeStatusListener>();
 
-ipcRenderer.on(IPC.Event, (_e, payload: WireEvent) => {
+function expandWireEvent(payload: WireEvent): AgentEvent {
   // text_delta_batch is wire-only; expand it to a synthetic text_delta for the
   // renderer so consumer code can stay agnostic of batching policy.
   if (payload.type === 'text_delta_batch') {
-    const expanded: AgentEvent = {
+    return {
       type: 'text_delta',
       messageId: payload.messageId,
       delta: payload.delta,
     };
-    for (const l of Array.from(listeners)) l(expanded);
-    return;
   }
   if (payload.type === 'thinking_delta_batch') {
-    const expanded: AgentEvent = {
+    return {
       type: 'thinking_delta',
       messageId: payload.messageId,
       delta: payload.delta,
     };
-    for (const l of Array.from(listeners)) l(expanded);
-    return;
   }
-  for (const l of Array.from(listeners)) l(payload as AgentEvent);
+  return payload as AgentEvent;
+}
+
+ipcRenderer.on(IPC.Event, (_e, payload: WireEvent) => {
+  const expanded = expandWireEvent(payload);
+  for (const l of Array.from(listeners)) l(expanded);
+});
+
+ipcRenderer.on(IPC.EventEnvelope, (_e, payload: WireEventEnvelope) => {
+  const expanded: AgentEventEnvelope = { ...payload, event: expandWireEvent(payload.event) };
+  for (const l of Array.from(envelopeListeners)) l(expanded);
 });
 
 type MaxListener = (isMaximized: boolean) => void;
@@ -69,6 +83,10 @@ ipcRenderer.on(IPC.WinIsMaximizedChanged, (_e, isMaximized: boolean) => {
 
 ipcRenderer.on(IPC.RpcLogEvent, (_e, entry: RpcLogEntry) => {
   for (const l of Array.from(rpcLogListeners)) l(entry);
+});
+
+ipcRenderer.on(IPC.RuntimeStatusEvent, (_e, status: ChatRuntimeStatus) => {
+  for (const l of Array.from(runtimeStatusListeners)) l(status);
 });
 
 const pi: PiApi = {
@@ -92,6 +110,21 @@ const pi: PiApi = {
       listeners.delete(listener);
     };
   },
+  subscribeAll: (listener: EnvelopeListener) => {
+    envelopeListeners.add(listener);
+    return () => {
+      envelopeListeners.delete(listener);
+    };
+  },
+  runtimes: {
+    list: (): Promise<ChatRuntimeStatus[]> => ipcRenderer.invoke(IPC.RuntimeStatusesGet),
+    subscribe: (listener: RuntimeStatusListener) => {
+      runtimeStatusListeners.add(listener);
+      return () => {
+        runtimeStatusListeners.delete(listener);
+      };
+    },
+  },
   rpcLogs: {
     list: (): Promise<RpcLogEntry[]> => ipcRenderer.invoke(IPC.RpcLogsGet),
     clear: (): Promise<void> => ipcRenderer.invoke(IPC.RpcLogsClear),
@@ -101,6 +134,9 @@ const pi: PiApi = {
         rpcLogListeners.delete(listener);
       };
     },
+  },
+  notifications: {
+    test: (): Promise<NotificationTestResult> => ipcRenderer.invoke(IPC.NotificationTest),
   },
   prefs: {
     get: (): Promise<PrefsShape> => ipcRenderer.invoke(IPC.PrefsGet),

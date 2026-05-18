@@ -1,4 +1,5 @@
 import { useEffect } from 'react';
+import { piClient } from './client/pi-client.js';
 import { Chat } from './components/Chat.js';
 import { InspectorPane } from './components/InspectorPane.js';
 import { Settings } from './components/Settings.js';
@@ -24,7 +25,7 @@ export function App() {
     ensureSubscribed();
     // Pin the platform onto <html data-platform="…"> so CSS can hide
     // decorative traffic lights on macOS where the OS renders real ones.
-    void window.pi.meta().then((meta) => {
+    void piClient.meta().then((meta) => {
       document.documentElement.dataset['platform'] = meta.platform;
     });
   }, [hydrate, ensureSubscribed]);
