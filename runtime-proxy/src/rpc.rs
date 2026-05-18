@@ -45,19 +45,17 @@ impl PiRpcClient {
         event_tx: mpsc::UnboundedSender<Value>,
         log_tx: mpsc::UnboundedSender<RpcLogEntry>,
     ) -> Result<Arc<Self>> {
-        let mut command = Command::new(pi_bin);
+        let mut command = pi_command(pi_bin, pi_args);
         command
-            .args(pi_args)
-            .arg("--mode")
-            .arg("rpc")
             .current_dir(cwd)
             .stdin(Stdio::piped())
             .stdout(Stdio::piped())
             .stderr(Stdio::piped());
 
-        let mut child = command.spawn().with_context(|| {
-            format!("failed to spawn `{pi_bin} --mode rpc` in {}", cwd.display())
-        })?;
+        let display_command = display_pi_command(pi_bin, pi_args);
+        let mut child = command
+            .spawn()
+            .with_context(|| format!("failed to spawn `{display_command}` in {}", cwd.display()))?;
         let stdin = child.stdin.take().context("pi child stdin unavailable")?;
         let stdout = child.stdout.take().context("pi child stdout unavailable")?;
         let stderr = child.stderr.take().context("pi child stderr unavailable")?;
@@ -303,6 +301,38 @@ async fn read_stderr(stderr: ChildStderr, client: Arc<PiRpcClient>) {
             }
         }
     }
+}
+
+fn pi_command(pi_bin: &str, pi_args: &[String]) -> Command {
+    #[cfg(windows)]
+    {
+        // Match Electron's Node RpcBackend behavior: npm-installed CLIs on
+        // Windows are often .cmd/.ps1 shims or extensionless MSYS wrappers.
+        // Running through cmd.exe lets PATH/PATHEXT resolve `pi` reliably.
+        let mut command = Command::new("cmd.exe");
+        command
+            .arg("/C")
+            .arg(pi_bin)
+            .args(pi_args)
+            .arg("--mode")
+            .arg("rpc");
+        command
+    }
+    #[cfg(not(windows))]
+    {
+        let mut command = Command::new(pi_bin);
+        command.args(pi_args).arg("--mode").arg("rpc");
+        command
+    }
+}
+
+fn display_pi_command(pi_bin: &str, pi_args: &[String]) -> String {
+    let mut parts = Vec::with_capacity(pi_args.len() + 3);
+    parts.push(pi_bin.to_string());
+    parts.extend(pi_args.iter().cloned());
+    parts.push("--mode".to_string());
+    parts.push("rpc".to_string());
+    parts.join(" ")
 }
 
 fn sanitize_value(value: Value) -> Value {
