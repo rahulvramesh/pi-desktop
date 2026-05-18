@@ -12,5 +12,6 @@ Thumbs.db
 playwright-report/
 test-results/
 coverage/
+target/
 .vscode/
 .idea/
