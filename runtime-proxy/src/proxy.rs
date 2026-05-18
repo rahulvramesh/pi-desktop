@@ -883,10 +883,16 @@ fn extract_tool_preview(value: Option<&Value>) -> Option<String> {
 
 fn truncate(text: &str, max: usize) -> String {
     if text.len() <= max {
-        text.to_string()
-    } else {
-        format!("{}\n... ({} more chars)", &text[..max], text.len() - max)
+        return text.to_string();
     }
+    let end = text
+        .char_indices()
+        .map(|(idx, _)| idx)
+        .take_while(|idx| *idx <= max)
+        .last()
+        .unwrap_or(0);
+    let head = &text[..end];
+    format!("{}\n... ({} more chars)", head, text.len() - end)
 }
 
 fn now_ms() -> i64 {
@@ -901,4 +907,17 @@ fn time_from_ms(ms: i64) -> String {
     chrono::DateTime::<chrono::Utc>::from_timestamp_millis(ms)
         .map(|dt| dt.with_timezone(&chrono::Local).format("%H:%M").to_string())
         .unwrap_or_else(now_hhmm)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::truncate;
+
+    #[test]
+    fn truncates_at_utf8_boundary() {
+        let text = format!("{}§suffix", "a".repeat(3_999));
+        let truncated = truncate(&text, 4_000);
+        assert!(truncated.starts_with(&"a".repeat(3_999)));
+        assert!(truncated.contains("more chars"));
+    }
 }
