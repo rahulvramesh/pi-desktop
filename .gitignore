@@ -9,6 +9,7 @@ Thumbs.db
 .env
 .env.local
 .env.*.local
+.pi-desktop-proxy.db*
 playwright-report/
 test-results/
 coverage/

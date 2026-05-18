@@ -29,7 +29,7 @@ Rules:
 
 ## Rust proxy MVP
 
-`runtime-proxy/` contains an Axum/Tokio service that owns per-chat `pi --mode rpc` children and emits chat-scoped WebSocket/SSE event envelopes. Electron can now launch/use it with `PI_BACKEND=proxy`; Electron still owns project/chat metadata in that mode while the proxy owns agent child processes.
+`runtime-proxy/` contains an Axum/Tokio service that owns per-chat `pi --mode rpc` children and emits chat-scoped WebSocket/SSE event envelopes. Electron can now launch/use it with `PI_BACKEND=proxy`; the proxy also has a SQLite-backed project/chat store for browser mode while Electron still uses its existing SQLite shell in proxy-backed desktop mode.
 
 Validate with:
 

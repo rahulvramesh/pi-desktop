@@ -19,6 +19,7 @@
     "proxy:fmt": "scripts\\cargo-vs.cmd fmt --manifest-path runtime-proxy\\Cargo.toml",
     "proxy:check": "scripts\\cargo-vs.cmd check --manifest-path runtime-proxy\\Cargo.toml",
     "proxy:build": "scripts\\cargo-vs.cmd build --manifest-path runtime-proxy\\Cargo.toml",
+    "proxy:test": "scripts\\cargo-vs.cmd test --manifest-path runtime-proxy\\Cargo.toml",
     "proxy:run": "scripts\\cargo-vs.cmd run --manifest-path runtime-proxy\\Cargo.toml",
     "rebuild": "node scripts/electron-rebuild.mjs",
     "postinstall": "node scripts/electron-rebuild.mjs"

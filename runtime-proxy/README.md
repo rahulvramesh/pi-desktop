@@ -24,6 +24,7 @@ Environment:
 PI_PROXY_HOST=127.0.0.1
 PI_PROXY_PORT=3939
 PI_PROXY_TOKEN=<optional; generated if omitted>
+PI_PROXY_DB=<optional SQLite path; defaults to ./.pi-desktop-proxy.db>
 PI_BIN=pi
 PI_BIN_ARGS=<optional extra args inserted before --mode rpc>
 ```
@@ -44,6 +45,7 @@ Validation:
 ```bash
 npm run proxy:fmt
 npm run proxy:check
+npm run proxy:test
 npm run proxy:build
 ```
 

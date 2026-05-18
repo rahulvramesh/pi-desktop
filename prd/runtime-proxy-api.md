@@ -64,7 +64,7 @@ Renderer behavior:
 
 ## Target Rust proxy API
 
-Prefer chat-scoped APIs. Avoid server-global active chat. `src/renderer/client/http-pi-client.ts` already implements the renderer-side shape expected from this API. The Rust MVP lives in `runtime-proxy/`, is validated with `npm run proxy:check`, and can back Electron runtimes with `PI_BACKEND=proxy`.
+Prefer chat-scoped APIs. Avoid server-global active chat. `src/renderer/client/http-pi-client.ts` already implements the renderer-side shape expected from this API. The Rust MVP lives in `runtime-proxy/`, is validated with `npm run proxy:check` / `npm run proxy:test`, persists projects/chats in SQLite, and can back Electron runtimes with `PI_BACKEND=proxy`.
 
 ```txt
 POST /api/chats/:chatId/open

@@ -1,3 +1,4 @@
+mod db;
 mod proxy;
 mod rpc;
 mod types;
@@ -26,6 +27,7 @@ use tracing::{info, warn};
 use uuid::Uuid;
 
 use crate::{
+    db::ProxyDb,
     proxy::{ProxyConfig, RuntimeManager},
     types::{
         Chat, OpenChatRequest, PromptRequest, SetModelRequest, SetThinkingLevelRequest,
@@ -36,6 +38,7 @@ use crate::{
 #[derive(Clone)]
 struct AppState {
     manager: RuntimeManager,
+    db: ProxyDb,
     auth_token: Arc<String>,
 }
 
@@ -67,9 +70,17 @@ async fn main() -> Result<()> {
         Ok(token) => (token, false),
         Err(_) => (Uuid::new_v4().to_string(), true),
     };
+    let db_path = env::var("PI_PROXY_DB")
+        .map(PathBuf::from)
+        .unwrap_or_else(|_| {
+            env::current_dir()
+                .unwrap_or_else(|_| PathBuf::from("."))
+                .join(".pi-desktop-proxy.db")
+        });
 
     let state = AppState {
         manager: RuntimeManager::new(ProxyConfig { pi_bin, pi_args }),
+        db: ProxyDb::open(&db_path)?,
         auth_token: Arc::new(token),
     };
 
@@ -77,6 +88,7 @@ async fn main() -> Result<()> {
         host = %host,
         port,
         token = if generated_token { state.auth_token.as_str() } else { "provided" },
+        db = %db_path.display(),
         "starting Pi runtime proxy; pass Authorization: Bearer <token>"
     );
 
@@ -251,13 +263,28 @@ async fn open_chat(
     Path(chat_id): Path<String>,
     body: Option<Json<OpenChatRequest>>,
 ) -> Result<Json<Chat>, ApiError> {
-    let req = body.map(|Json(req)| req).unwrap_or(OpenChatRequest {
+    let mut req = body.map(|Json(req)| req).unwrap_or(OpenChatRequest {
         project_id: None,
         cwd: None,
         session_file: None,
         title: None,
     });
-    Ok(Json(state.manager.open_chat(chat_id, req).await?))
+
+    if let Some(chat) = state.db.get_chat(&chat_id)? {
+        if let Some(project) = state.db.get_project(&chat.project_id)? {
+            req.project_id.get_or_insert(chat.project_id.clone());
+            req.cwd.get_or_insert(PathBuf::from(project.path));
+            if req.session_file.is_none() {
+                req.session_file = chat.session_file.clone();
+            }
+            req.title.get_or_insert(chat.title);
+        }
+    }
+
+    let chat = state.manager.open_chat(chat_id, req).await?;
+    let _ = state.db.touch_project(&chat.project_id);
+    let _ = state.db.touch_chat(&chat.id);
+    Ok(Json(chat))
 }
 
 async fn prompt(
@@ -299,7 +326,11 @@ async fn get_state(
     State(state): State<AppState>,
     Path(chat_id): Path<String>,
 ) -> Result<Json<Value>, ApiError> {
-    Ok(Json(json!(state.manager.get_state(&chat_id).await?)))
+    let agent_state = state.manager.get_state(&chat_id).await?;
+    if let Some(session_file) = agent_state.session_file.as_deref() {
+        let _ = state.db.set_session_file(&chat_id, session_file);
+    }
+    Ok(Json(json!(agent_state)))
 }
 
 async fn get_messages(
@@ -408,29 +439,21 @@ async fn set_prefs(Json(patch): Json<Value>) -> Json<Value> {
     Json(patch)
 }
 
-async fn list_projects() -> Json<Value> {
-    Json(json!([]))
+async fn list_projects(State(state): State<AppState>) -> Result<Json<Value>, ApiError> {
+    Ok(Json(json!(state.db.list_projects()?)))
 }
 
-async fn add_project(Json(body): Json<Value>) -> Json<Value> {
-    let path = body.get("path").and_then(Value::as_str).unwrap_or_default();
-    let derived_name = PathBuf::from(path)
-        .file_name()
-        .and_then(|name| name.to_str())
-        .unwrap_or("Project")
-        .to_string();
-    let name = body
-        .get("name")
+async fn add_project(
+    State(state): State<AppState>,
+    Json(body): Json<Value>,
+) -> Result<Json<Value>, ApiError> {
+    let path = body
+        .get("path")
         .and_then(Value::as_str)
-        .filter(|name| !name.is_empty())
-        .unwrap_or(&derived_name);
-    Json(json!({
-        "id": Uuid::new_v4().to_string(),
-        "name": name,
-        "path": path,
-        "createdAt": now_ms(),
-        "lastOpenedAt": null
-    }))
+        .filter(|path| !path.trim().is_empty())
+        .ok_or_else(|| ApiError(anyhow::anyhow!("project path is required")))?;
+    let name = body.get("name").and_then(Value::as_str);
+    Ok(Json(json!(state.db.add_project(path, name)?)))
 }
 
 async fn project_pick_unavailable() -> Json<Value> {
@@ -441,33 +464,51 @@ async fn project_icon() -> Json<Value> {
     Json(Value::Null)
 }
 
-async fn remove_project(Path(_project_id): Path<String>) -> StatusCode {
-    StatusCode::NO_CONTENT
+async fn remove_project(
+    State(state): State<AppState>,
+    Path(project_id): Path<String>,
+) -> Result<StatusCode, ApiError> {
+    for chat in state.db.list_chats(&project_id)? {
+        state.manager.dispose_chat(&chat.id).await;
+    }
+    state.db.remove_project(&project_id)?;
+    Ok(StatusCode::NO_CONTENT)
 }
 
-async fn list_chats(Path(_project_id): Path<String>) -> Json<Value> {
-    Json(json!([]))
+async fn list_chats(
+    State(state): State<AppState>,
+    Path(project_id): Path<String>,
+) -> Result<Json<Value>, ApiError> {
+    Ok(Json(json!(state.db.list_chats(&project_id)?)))
 }
 
-async fn create_chat(Path(project_id): Path<String>, Json(body): Json<Value>) -> Json<Value> {
-    let now = now_ms();
-    Json(json!({
-        "id": Uuid::new_v4().to_string(),
-        "projectId": project_id,
-        "title": body.get("title").and_then(Value::as_str).unwrap_or("New chat"),
-        "sessionFile": null,
-        "createdAt": now,
-        "updatedAt": now
-    }))
+async fn create_chat(
+    State(state): State<AppState>,
+    Path(project_id): Path<String>,
+    Json(body): Json<Value>,
+) -> Result<Json<Value>, ApiError> {
+    let title = body.get("title").and_then(Value::as_str);
+    Ok(Json(json!(state.db.create_chat(&project_id, title)?)))
 }
 
-async fn rename_chat(Path(_chat_id): Path<String>, Json(_body): Json<Value>) -> StatusCode {
-    StatusCode::NO_CONTENT
+async fn rename_chat(
+    State(state): State<AppState>,
+    Path(chat_id): Path<String>,
+    Json(body): Json<Value>,
+) -> Result<StatusCode, ApiError> {
+    if let Some(title) = body.get("title").and_then(Value::as_str) {
+        state.db.rename_chat(&chat_id, title)?;
+    }
+    Ok(StatusCode::NO_CONTENT)
 }
 
-async fn delete_chat(State(state): State<AppState>, Path(chat_id): Path<String>) -> StatusCode {
+async fn delete_chat(
+    State(state): State<AppState>,
+    Path(chat_id): Path<String>,
+) -> Result<StatusCode, ApiError> {
     state.manager.dispose_chat(&chat_id).await;
-    StatusCode::NO_CONTENT
+    state.db.delete_chat(&chat_id)?;
+    Ok(StatusCode::NO_CONTENT)
 }
 
 async fn fs_tree_unavailable() -> Json<Value> {
@@ -500,8 +541,4 @@ impl IntoResponse for ApiError {
         };
         (status, Json(json!({ "error": msg }))).into_response()
     }
-}
-
-fn now_ms() -> i64 {
-    chrono::Utc::now().timestamp_millis()
 }
