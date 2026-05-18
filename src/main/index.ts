@@ -129,6 +129,12 @@ function createWindow(): BrowserWindow {
 
   win.once('ready-to-show', () => win.show());
 
+  if (isDev && process.env.PI_OPEN_DEVTOOLS !== '0') {
+    win.webContents.once('did-finish-load', () => {
+      if (!win.isDestroyed()) win.webContents.openDevTools({ mode: 'detach' });
+    });
+  }
+
   if (isDev) {
     void win.loadURL(process.env['ELECTRON_RENDERER_URL']!);
   } else {
